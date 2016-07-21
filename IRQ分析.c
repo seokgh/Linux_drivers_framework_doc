@@ -1,0 +1,91 @@
+Linux Kernel 中 irq handler, softirq handler 和 tasklet 是比较容易混淆的概念。
+
+
+irq handler        通常被称为中断执行的 TOP Half，
+softirq 和 tasklet 通常被称为中断执行的 Bottom Half。
+
+
+当启用了 中断上/下半部处理 机制时，它们的执行次序可见下：
+
+某硬件interrupt line触发irq
+	--->(interrupt line disabled)
+		---->cpu进入irq exception
+			---->根据irq触发的interrupt line，调用相应的irq handler
+				---->(interrupt line enabled)
+					---->判断是不是在嵌套的irq handler里，如果不是（最后一层irq)
+						---->preempt disable
+							---->根据irq_stat[CPU_NUM]里被置位的bit，运行相应的softirq handler
+								---->如果irq_stat[TASKLET_SOFTIRQ]被置位，那么tasklet handler的链表将作为softirq_vec[TASKLET_SOFTIRQ]的 handler 被执行
+									---->所有置位的softirq handler都执行完了
+										---->preempt enable
+											---->irq返回。
+
+
+
+
+
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//msm_isp.c 
+tasklet_init (&vfe_dev->vfe_tasklet, msm_isp_do_tasklet, (unsigned long)vfe_dev);
+
+
+
+
+//msm_isp40.c 
+rc = request_irq (vfe_dev->vfe_irq->start, msm_isp_process_irq, IRQF_TRIGGER_RISING, "vfe", vfe_dev);
+
+
+
+
+/////////////////////////////////////////////////////////////////////
+//msm_isp_util.c
+/////////////////////////////////////////////////////////////////////
+void msm_isp_do_tasklet(unsigned long data)
+{
+	
+}
+
+irqreturn_t  msm_isp_process_irq (int irq_num, void *data)
+{
+
+	msm_isp_enqueue_tasklet_cmd(vfe_dev, irq_status0, irq_status1, 0);
+
+	return IRQ_HANDLED;
+}
+
+
+
+
+
+
+----------------------------------------------------------------------------------
+arch/arm/kernel/irq.c
+----------------------------------------------------------------------------------
+asmlinkage void __exception_irq_entry
+asm_do_IRQ(unsigned int irq, struct pt_regs *regs)
+{
+	handle_IRQ(irq, regs);
+}
+
+void handle_IRQ(unsigned int irq, struct pt_regs *regs)
+{
+	struct pt_regs *old_regs = set_irq_regs(regs);
+	irq_enter();
+
+	// Some hardware gives randomly wrong interrupts.  Rather than crashing, do something sensible.
+	if (unlikely(irq >= nr_irqs)) {
+		if (printk_ratelimit())
+			printk(KERN_WARNING "Bad IRQ%u\n", irq);
+		ack_bad_irq(irq);
+	} else {
+		generic_handle_irq(irq);
+	}
+
+	irq_exit();
+	set_irq_regs(old_regs);
+}
+
+
+
