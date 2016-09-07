@@ -1,0 +1,145 @@
+ V4L2文档翻译（二）
+
+
+视频设备通常支持一种或多种不同的视频标准或更多的标准衍生体。每一个视频输入和输出支持一组标准。这项设置由VIDIOC_ENUMINPUT和VIDIOC_ENUMOUTPUT ioctl返回的v4l2_input和v4l2_output结构体中的std成员体现。
+
+V4L2位每一种现今世界的模拟视频标准定义了一个位，且为驱动定义标准留出了一些位。比如，在PAL TV上观看NTSC视频的混合标准。应用程序可以使用预定义的位来选择一个特殊标准，推荐向用户展示所支持标准的菜单。应用程序可以使用VIDIOC_ENUMSTD ioctl来列举和查询所支持标准的属性。
+
+所定义的标准中，许多都是一些主要标准的变种。实际上，硬件不必去区分他们，或者在内部做自动切换。因此，列举出来的标准也包含了一个或多个标准位。
+
+假设一个调谐器能够解调B/PAL，G/PAL和I/PAL信号。首先列举出来的是B和G/PAL标准，根据UHF或VHF波段的无线频率实现自动切换。列举给出PAL-B/G或PAL-I的选择。像一些复合输入会使标准崩溃，如PAL-B/G/H/I，NTSC-M和SECAM-D/K。
+
+应用程序可通过VIDIOC_G_STD和VIDIOC_S_STD ioctl查询和选择当前视频输入或输出的标准。可通过VIDIOC_QUERYSTD ioctl感知接收到的标准。注意，所有这些ioctl的参数是v4l2_std_id类型指针，并不是列举出的标准的索引号。若设备拥有一个或以上的视频输入或输出，其驱动必须声明所有视频标准的ioctl。
+
+一些适用于设备的特殊规则（如USB相机的毫无意义的视频标准），也可用于任何符合下列情况的捕捉或输出设备：
+
+    使用视频标准标称速率无法捕捉字段或帧
+    不支持任何视频标准格式
+
+这些驱动应该将v4l2_input或v4l2_output结构体中的std成员设为0，且VIDIOC_G_STD,VIDIOC_S_STD,VIDIOC_QUERYSTD,VIDIOC_ENUMSTD ioctl应返回ENOTTY或EINVAL错误码。
+
+应用程序可以使用下表中的标志来判断是否给定的输入或输出支持视频标准ioctl：
+
+Table A.38. Input capabilities
+
+V4L2_IN_CAP_DV_TIMINGS    0x00000002    This input supports setting video timings by using VIDIOC_S_DV_TIMINGS.
+V4L2_IN_CAP_STD    0x00000004    This input supports setting the TV standard by using VIDIOC_S_STD.
+
+Table A.41. Output capabilities
+
+V4L2_OUT_CAP_DV_TIMINGS    0x00000002    This output supports setting video timings by using VIDIOC_S_DV_TIMINGS.
+V4L2_OUT_CAP_STD    0x00000004    This output supports setting the TV standard by using VIDIOC_S_STD.
+
+例 1.5 当前视频标准信息
+
+v4l2_std_id std_id;
+struct v4l2_standard standard;
+
+if (-1 == ioctl(fd, VIDIOC_G_STD, &std_id)) {
+    /* Note when VIDIOC_ENUMSTD always returns ENOTTY this
+       is no video device or it falls under the USB exception,
+       and VIDIOC_G_STD returning ENOTTY is no error. */
+
+    perror("VIDIOC_G_STD");
+    exit(EXIT_FAILURE);
+}
+
+memset(&standard, 0, sizeof(standard));
+standard.index = 0;
+
+while (0 == ioctl(fd, VIDIOC_ENUMSTD, &standard)) {
+    if (standard.id & std_id) {
+           printf("Current video standard: %s\n", standard.name);
+           exit(EXIT_SUCCESS);
+    }
+
+    standard.index++;
+}
+
+/* EINVAL indicates the end of the enumeration, which cannot be
+   empty unless this device falls under the USB exception. */
+
+if (errno == EINVAL || standard.index == 0) {
+    perror("VIDIOC_ENUMSTD");
+    exit(EXIT_FAILURE);
+}
+
+例 1.6 列出当前输入支持的视频标准
+
+struct v4l2_input input;
+struct v4l2_standard standard;
+
+memset(&input, 0, sizeof(input));
+
+if (-1 == ioctl(fd, VIDIOC_G_INPUT, &input.index)) {
+    perror("VIDIOC_G_INPUT");
+    exit(EXIT_FAILURE);
+}
+
+if (-1 == ioctl(fd, VIDIOC_ENUMINPUT, &input)) {
+    perror("VIDIOC_ENUM_INPUT");
+    exit(EXIT_FAILURE);
+}
+
+printf("Current input %s supports:\n", input.name);
+
+memset(&standard, 0, sizeof(standard));
+standard.index = 0;
+
+while (0 == ioctl(fd, VIDIOC_ENUMSTD, &standard)) {
+    if (standard.id & input.std)
+        printf("%s\n", standard.name);
+
+    standard.index++;
+}
+
+/* EINVAL indicates the end of the enumeration, which cannot be
+   empty unless this device falls under the USB exception. */
+
+if (errno != EINVAL || standard.index == 0) {
+    perror("VIDIOC_ENUMSTD");
+    exit(EXIT_FAILURE);
+}
+
+例 1.7 选择新的视频标准
+
+struct v4l2_input input;
+v4l2_std_id std_id;
+
+memset(&input, 0, sizeof(input));
+
+if (-1 == ioctl(fd, VIDIOC_G_INPUT, &input.index)) {
+    perror("VIDIOC_G_INPUT");
+    exit(EXIT_FAILURE);
+}
+
+if (-1 == ioctl(fd, VIDIOC_ENUMINPUT, &input)) {
+    perror("VIDIOC_ENUM_INPUT");
+    exit(EXIT_FAILURE);
+}
+
+if (0 == (input.std & V4L2_STD_PAL_BG)) {
+    fprintf(stderr, "Oops. B/G PAL is not supported.\n");
+    exit(EXIT_FAILURE);
+}
+
+/* Note this is also supposed to work when only B
+   or G/PAL is supported. */
+
+std_id = V4L2_STD_PAL_BG;
+
+if (-1 == ioctl(fd, VIDIOC_S_STD, &std_id)) {
+    perror("VIDIOC_S_STD");
+    exit(EXIT_FAILURE);
+}
+
+数字视频（DV）时序
+
+目前为止所讨论过的视频标准是关于模拟TV及相关视频时序。现如今已经有更多不同的硬件接口，如HDMI,VGA,DVI等等，有必要对API进行扩展来选择这些接口的视频时序。由于v4l2_std_id的位限制不能用来扩展，则添加了一组新的ioctl来在输入、输出时设置、获取视频时序。
+
+这些ioctl处理每种视频格式的详细的数字视频时序。其参数包含了例如有效视频的宽度和高度、信号极性、前沿、后沿、同步宽度等等。linux/v4l2-dv-timings.h头文件可以用来获取CEA-861-E和VESA_DMT标准格式的时序。
+
+应用程序可以通过VIDIOC_ENUM_DV_TIMINGS和VIDIOC_DV_TIMINGS_CAP ioctl来对设备所支持的DV序列进行列举和属性查询。应用程序可通过VIDIOC_S_DV_TIMINGS ioctl设置DV时序，通过VIDIOC_G_DV_TIMINGS获取当前DV时序。VIDIOC_QUERY_DV_TIMINGS ioctl用来探测视频接收器的DV时序。
+
+应用程序同样可以使用表Table A.38. Input capabilities和Table A.41. Output capabilities中的标志判断给定的输入或输出是否可以使用数字视频ioctl。
+

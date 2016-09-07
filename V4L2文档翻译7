@@ -1,0 +1,164 @@
+ V4L2文档翻译（七）
+2014-04-11 17:17 979人阅读 评论(0) 收藏 举报
+分类：
+Linux学习、开发与驱动（20）
+
+目录(?)[+]
+裁剪、组合及缩放的实验性API
+
+
+实验性接口将来也许会发生改变
+
+介绍
+
+一些视频捕捉设备可以对一张图片的取样部分进行任意尺寸的缩小或放大。然后，这些设备可以讲这个图片插入到更大的图片中。一些视频输出设备可以对输入图片进行部分裁剪，对其进行缩放以及将其插入到视频信号的任意扫描线和横向偏移中。对于这些能力，我们称之为裁剪、缩放和组合。
+
+对于视频捕捉设备来说，源是视频信号，由其裁剪目标决定真实取样的区域。sink是存储在内存缓冲内的一张图片。组合区域指的是缓存中的哪部分被真实写入到硬件。
+
+对于视频输出设备来说，源是内存缓冲中的一张图片，裁剪区域指的是所显示的一张图片的哪部分。sink是显示的东西或物理屏幕。应用程序可以选择一张图片要显示在显示屏的哪部分。组合目标控制着这样一个窗口的大小和位置。
+
+就算设备对裁剪和组合都不支持，所有裁剪和组合目标的矩形区域还是被定义了的。这样他们的大小和位置不会改变。如果设备不支持缩放，那么裁剪和组合的矩形区域的尺寸是一样的。
+
+选择目标
+
+小节1.2 裁剪和组合目标
+	图略....
+
+查看“目标选择Selection targets”章节获取更多信息。
+
+设置
+
+应用程序可以通过选择API在视频信号或缓冲内选择区域，并且查询默认设置以及硬件限制。
+
+视频硬件可以拥有多种裁剪、组合及缩放的限制条件。可能只支持放大或缩小，只支持不连续的缩放系数，或者在横向和竖向上有不同的缩放能力，甚至有可能压根就不支持缩放。同时裁剪、组合的矩形区域可能需要对齐，源和sink可能拥有任意的上下限制。因此，通常来说，驱动要能对请求的参数进行调节并返回所选择的实际值。应用程序可以通过constraint_flags控制舍入行为。
+标志名 	ID 	定义
+V4L2_SEL_FLAG_GE 	1<<0 	建议驱动相对于请求尺寸更大或相等的矩形区域
+V4L2_SEL_FLAG_LE 	1<<1 	建议驱动选择更小或相等的矩形区域尺寸
+V4L2_SEL_FLAG_KEEP_CONFIG 	1<<2 	此设置不能在之后的处理步骤中被传播。如果没有设置这个标签，设置可以在子设备之后的处理过程中被传播
+
+视频捕捉设置
+
+小节1.2可以作为视频捕捉设备选择目标的示例。在组合目标前建议先设置裁剪目标。
+
+左上角坐标范围、区域宽高可以通过V4L2_SEL_TGT_CROP_BOUNDS给出。建议驱动开发者将左上角设置为位置(0,0)。矩形区域坐标单位是像素。
+
+左上角及源矩形区域的宽高是真实的取样区域，通过V4L2_SEL_TGT_CROP给出。其坐标系统与V4L2_SEL_TGT_CROP_BOUNDS相同，活跃的裁剪区域必须完全在捕捉范围内。驱动可以根据硬件限制对请求尺寸或位置进行调整。
+
+每一个捕捉设备都有默认源矩形区域，通过V4L2_SEL_TGT_CROP_DEFAULT给出。这个区域应该涵盖了驱动编写者对完整图片的考虑。当驱动首次加载时驱动应该设置默认的活跃裁剪矩形区域，而不是之后再设置。
+
+组合目标适用于内存缓冲。V4L2_SEL_TGT_COMPOSE_BOUNDS给出了组合坐标的限制。所有坐标都是以像素为单位的。矩形区域的左上角必须定位到位置(0,0)，宽高与VIDIOC_S_FMT设置的图片尺寸相同。
+
+V4L2_SEL_TGT_COMPOSE控制缓冲部分插入硬件的哪一个图片中，矩形区域使用的坐标系统与边界矩形区域相同。组合矩形区域必须完全在辩解矩形区域内。驱动必须使组合矩形区域适应边界限制。另外，驱动还要根据硬件限制做出其他调整。应用程序同样可以通过constraint_flags进行舍入控制。
+
+对于捕捉设备来说，默认的组合矩形区域由V4L2_SEL_TGT_COMPOSE_DEFAULT提供。通常它的值与边界区域相同。
+
+V4L2_SEL_TGT_COMPOSE_PADDED给出了硬件会修改哪部分缓存，它包含了V4L2_SEL_TGT_COMPOSE的所有像素外加查如果成功硬件会修改的填充数据，硬件不能对此矩形区域外的所有的像素进行任何改变。那些在活跃区域外却在填充区域内的像素内容是未定义的（不确定的）。应用程序可以检查填充和活跃矩形区域中哪里有垃圾像素，必要时可以删除他们。
+
+视频输出设备设置
+
+输出设备的目标和ioctl与视频捕捉设备类似。组合矩形区域代表视频信号中的图像插入，而裁剪矩形区域代表内存缓冲。建议在裁剪目标之前设置组合目标。
+
+裁剪区域为要插入视频信号或物理显示屏中的包含一张图片的缓存。V4L2_SEL_TGT_CROP_BOUNDS给出了裁剪坐标的限制，所有坐标以像素为单位。左上角永远是点(0,0)，其宽高与VIDIOC_S_FMT ioctl设置的图片尺寸相同。
+
+左上角和源矩形区域的宽高，是硬件处理的图像数据中的区域，通过V4L2_SEL_TGT_CROP给出。其坐标与边界矩形区域使用相同的坐标系统。活跃的裁剪区域必须完全在裁剪界限内，而且驱动有可能根据硬件限制对请求的尺寸、位置进行调整。
+
+输出设备的默认裁剪区域由V4L2_SEL_TGT_CROP_DEFAULT给出，通常与边界区域相同。
+
+V4L2_SEL_TGT_COMPOSE控制着硬件所插入的图片在视频信号或显示器的哪部分，坐标单位为像素。组合矩形区域必须完全处在边界范围内，驱动必须对其进行调整以适应边界限制。另外，驱动还可以根据硬件限制进行其他的调整。
+
+V4L2_SEL_TGT_COMPOSE_DEFAULT给出了设备默认的组合矩形区域，这个区域必须涵盖了驱动编写者所考虑的完成图片，建议驱动开发人员将左上角设为位置(0,0)。在驱动首次加载后，驱动要对活跃组合区域设置默认值。
+
+除了缓存冲的图片，设备可能为视频信号加入额外的内容，它包含了一张图片的边界。无论如何，这个填充区域特性不在此文档中涵盖内容中。我们鼓励驱动开发者将填充矩形区域与活跃区域保持一致。V4L2_SEL_TGT_COMPOSE_PADDED定义填充目标，必须包含V4L2_SEL_TGT_COMPOSE所包含的所有像素。
+
+缩放控制
+
+应用程序可以通过比对V4L2_SEL_TGT_CROP和V4L2_SEL_TGT_COMPOSE所获取的宽高来检查是否可缩放，若不一样则可缩放。使用这些值还可以计算出缩放系数。
+
+与旧的裁剪API相比
+
+选择API是为弥补旧API的不足而产生的，旧API是为控制简单捕捉设备而设计的，然后裁剪API就被视频输出驱动抛弃了。ioctl用来选择视频信号插入到显示的哪里，因为描述的操作是切实的组合则需要考虑到API的滥用。选择API对于给合适的目标设置组合和裁剪有着清晰的区别。V4L2 API缺乏对于内存中的一张图片组合和裁剪的支持，应用程序只能通过滥用V4L2 API可以设置捕捉设备填充一张图片的一部分。通过设置struct v4l2_pix_format的bytesperline成员可以达到从大图片中裁剪小图片的目的。在VIDIOC_QBUF ioctl前修改struct v4l2_buffer的m_userptr成员可以控制一张图片的偏移量。以上这些操作都应该尽量避免，因为他们的可移植性不好，而且在红魔快、Bayer贝尔模式及mmap映射缓存中无效。选择API能够清晰的处理缓存的裁剪和组合，直观且可移植。然后，伴随着选择API还产生了填充目标与约束标志的概念。最后，struct v4l2_crop和v4l2_cropcap已经没有了预留成员，因此也就没有办法再去扩展他们的功能，而新的struct v4l2_selection提供了大量的预留空间。我们鼓励驱动开发者只使用选择API，旧的裁剪API将会使用新的进行仿真实现。
+
+示例
+
+例1.14 重设裁剪参数
+
+假设一个视频捕捉设备，为其他设备修改V4L2_BUF_TYPE_VIDEO_CAPTURE，设置组合区域为V4L2_SEL_TGT_COMPOSE_*的目标。
+
+    struct v4l2_selection sel = {
+        .type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+        .target = V4L2_SEL_TGT_CROP_DEFAULT,
+    };
+    ret = ioctl(fd, VIDIOC_G_SELECTION, &sel);
+    if (ret)
+        exit(-1);
+    sel.target = V4L2_SEL_TGT_CROP;
+    ret = ioctl(fd, VIDIOC_S_SELECTION, &sel);
+    if (ret)
+        exit(-1);
+
+例1.15 简单的缩小
+
+在输出上设置一个组合区域尺寸最大为一般，放置在显示区域中心。
+
+    struct v4l2_selection sel = {
+        .type = V4L2_BUF_TYPE_VIDEO_OUTPUT,
+        .target = V4L2_SEL_TGT_COMPOSE_BOUNDS,
+    };
+    struct v4l2_rect r;
+
+    ret = ioctl(fd, VIDIOC_G_SELECTION, &sel);
+    if (ret)
+        exit(-1);
+    /* setting smaller compose rectangle */
+    r.width = sel.r.width / 2;
+    r.height = sel.r.height / 2;
+    r.left = sel.r.width / 4;
+    r.top = sel.r.height / 4;
+    sel.r = r;
+    sel.target = V4L2_SEL_TGT_COMPOSE;
+    sel.flags = V4L2_SEL_FLAG_LE;
+    ret = ioctl(fd, VIDIOC_S_SELECTION, &sel);
+    if (ret)
+        exit(-1);
+
+例1.16 查询缩放系数
+
+    struct v4l2_selection compose = {
+        .type = V4L2_BUF_TYPE_VIDEO_OUTPUT,
+        .target = V4L2_SEL_TGT_COMPOSE,
+    };
+    struct v4l2_selection crop = {
+        .type = V4L2_BUF_TYPE_VIDEO_OUTPUT,
+        .target = V4L2_SEL_TGT_CROP,
+    };
+    double hscale, vscale;
+
+    ret = ioctl(fd, VIDIOC_G_SELECTION, &compose);
+    if (ret)
+        exit(-1);
+    ret = ioctl(fd, VIDIOC_G_SELECTION, &crop);
+    if (ret)
+        exit(-1);
+
+    /* computing scaling factors */
+    hscale = (double)compose.r.width / crop.r.width;
+    vscale = (double)compose.r.height / crop.r.height;
+
+
+流参数
+
+流参数用来优化视频捕捉进程，如I/O。目前，应用程序可以通过VIDIOC_S_PARAM ioctl申请高质量的捕捉模式。
+
+当前视频标准决定了每秒最少多少帧，如果捕获的或输出的帧数少于这个，那么应用程序可以请求驱动进行跳帧或复写。这对read()或write()来说就尤其有用，但是不要岁时间戳或队列计数器而增长，并且要避免没必要的数据拷贝。
+
+最后，这些ioctl可以用来决定在read或write模式中驱动内部的缓存数量，其声明见read()
+
+#include <unistd.h>
+ssize_t read(int fd,
+     void *buf,
+     size_t count);
+
+应用程序可以通过VIDIOC_G_PARAM和VIDIOC_S_PARAM ioctl分别获取和设置流参数。他们需要一个struct v4l2_streamparam类型指针，包含了输入、输出设备的各种参数。
+
+这些ioctl是可选的，驱动可以不声明他们，会返回EINVAL错误码。
+

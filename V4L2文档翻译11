@@ -1,0 +1,90 @@
+ V4L2文档翻译（十一）
+2014-05-05 10:53 1776人阅读 评论(0) 收藏 举报
+分类：
+Linux学习、开发与驱动（20）
+
+目录(?)[+]
+
+http://linuxtv.org/downloads/v4l-dvb-apis/ch02s08.html
+压缩格式
+定义 	                 码 	描述
+V4L2_PIX_FMT_JPEG 	'JPEG' 	待定，见VIDIOC_G_JPEGCOMP VIDIOC_S_JPEGCOMP
+V4L2_PIX_FMT_MPEG 	'MPEG' 	MPEG复合流，实际格式由V4L2_CID_MPEG_STREAM_TYPE控制
+V4L2_PIX_FMT_H264 	'H264' 	不带起始码的H264视频基本码流
+V4L2_PIX_FMT_H264_NO_SC 'AVC1' 	带起始码的H264视频基本码流
+V4L2_PIX_FMT_MVC 	'MVC' 	H264 MVC视频流
+V4L2_PIX_FMT_H263 	'H263' 	H263视频流
+V4L2_PIX_MPEG1 	        'MPG1' 	MPEG1视频流
+V4L2_PIX_MPEG2 	        'MPG2' 	MPEG2视频流
+V4L2_PIX_MPEG4 	        'MPG4' 	MPEG4视频流
+V4L2_PIX_FMT_XVID       'XVID' 	XVID视频流
+V4L2_PIX_FMT_VC1_ANNEX_G 'VC1G' VC1, SMPTE 421M Annex G兼容流
+V4L2_PIX_FMT_VC1_ANNEX_L 'VC1L' VC1, SMPTE 421M Annex L兼容流
+V4L2_PIX_FMT_VP8        'VP8' 	VP8视频流
+
+SDR格式
+这些格式只在SDR捕捉中用到（第四节）
+V4L2_SDR_FMT_CU8 ('CU08')
+名字
+
+V4L2_SDR_FMT_CU8 复合无符号8位IQ取样
+描述
+
+此格式包含了符合数字取样数列，每个符合数字包括两个部分，同步（In-phase）和正交（Quadrature）即IQ。I和Q都是无符号8位数据，首先是I的值然后是Q。
+
+例2.34 V4L2_SDR_FMT_CU8 一次取样
+
+start + 0:    I'0
+start + 1:    Q'0
+
+V4L2_SDR_FMT_CU16LE ('CU16')
+名字
+
+V4L2_SDR_FMT_CU16LE 复合型无符号16位（低位）IQ取样
+描述
+
+此格式包含符合数字取样序列，每个符合数包括两部分：一个I，一个Q，他们都是16位无符号数据（低位）。先是I，后是Q。
+
+例2.35 V4L2_SDR_FMT_CU16LE 一次取样
+
+start + 0:    I'0[7:0]    I'0[15:8]
+start + 2:    Q'0[7:0]    Q'0[15:8]
+
+保留格式定义
+
+这些格式并没有在规格中被定义，他们列举出来只是为了防止命名冲突。如果你想注册你自己的格式，那么向邮件列表中发送一封邮件，并包含videodev2.h文件。如果你想同其他开发者共享你的格式，那么添加一个你的文档连接，并发送一个邮件列表（包含那部分的）拷贝。若你觉得你的格式应该列为标准格式，那么请在linux-media邮件列表中提议。
+定义 	                   码 	描述
+V4L2_PIX_FMT_DV 	'dvsd' 	未知
+V4L2_PIX_FMT_ET61X251 	'E625' 	ET61X251驱动的压缩格式
+V4L2_PIX_FMT_HI240 	'HI24' 	BTTV驱动所用的8位RGB格式
+V4L2_PIX_FMT_HM12 	'HM12' 	IVTV所用YUV4:2:0格式http://www.ivtvdriver.org/ 内核文档 Documentation/video4linux/cx2341x/README.hm12
+V4L2_PIX_FMT_CPIA1 	'CPIA' 	相机适配器所用YUV格式
+V4L2_PIX_FMT_JPGL 	'JPGL' 	Divio网络摄像头NW 80x所用轻量JPEG格式
+V4L2_PIX_FMT_SPCA501 	'S501' 	相机适配器所用每行YUYV
+V4L2_PIX_FMT_SPCA505 	'S505' 	相机适配器所用每行YYUV
+V4L2_PIX_FMT_SPCA508 	'S508' 	相机适配器驱动所用每行YUVY
+V4L2_PIX_FMT_SPCA561 	'S561' 	相机适配器驱动所用压缩GBRG贝尔格式
+V4L2_PIX_FMT_PAC207 	'P207' 	相机适配器驱动所用压缩BGGR贝尔格式
+V4L2_PIX_FMT_MR97310A 	'M310' 	相机适配器驱动所用压缩BGGR贝尔格式
+V4L2_PIX_FMT_JL2005BCD 	'JL20' 	相机适配器驱动所用JPEG压缩RGGB贝尔格式
+V4L2_PIX_FMT_OV511 	'O511' 	相机适配器驱动所用OV511 JPEG格式
+V4L2_PIX_FMT_OV518 	'O518' 	相机适配器驱动所用OV518 JPEG格式
+V4L2_PIX_FMT_PJPG 	'PJPG' 	相机适配器驱动所用Pixart 73xx JPEG格式
+V4L2_PIX_FMT_SE401 	'S401' 	SE401适配器驱动所用压缩RGB格式
+V4L2_PIX_FMT_SQ905C 	'905C' 	相机适配器驱动所用压缩RGGB贝尔格式
+V4L2_PIX_FMT_MJPEG 	'MJPG' 	Zoran驱动所用压缩格式
+V4L2_PIX_FMT_PWC1 	'PWC1' 	PWC驱动所用压缩格式
+V4L2_PIX_FMT_PWC2 	'PWC2' 	PWC驱动所用压缩格式
+V4L2_PIX_FMT_SN9C10X 	'S910' 	SN9C102驱动所用压缩格式
+V4L2_PIX_FMT_SN9C20X_I420 	'S920' 	sn9c20x驱动所用YUV4:2:0格式
+V4L2_PIX_FMT_SN9C2028 	'SONX' 	sn9c2028驱动所用压缩GBRG贝尔格式
+V4L2_PIX_FMT_STV0680 	'S680' 	stv0680适配器驱动所用贝尔格式
+V4L2_PIX_FMT_WNVA 	'WNVA' 	Winnov Videu驱动所用, http://www.thedirks.org/winnov/
+V4L2_PIX_FMT_TM6000 	'TM60' 	Trident tm6000所用
+V4L2_PIX_FMT_CIT_YYVYUY 	'CITV' 	xirlink CIT所用，IBM网络摄像头，一行Y然后一样VYUY
+V4L2_PIX_FMT_KONICA420 	'KONI' 	Konica网络摄像头所用，256色YUV420平面
+V4L2_PIX_FMT_YYUV 	'YYUV' 	未知
+V4L2_PIX_FMT_Y4 	'Y04 ' 	老式4位灰度格式，每字节只用最高4位，其余为0
+V4L2_PIX_FMT_Y6 	'Y06 ' 	老式6位灰度格式，每字节用最高6位，其余为0
+
+V4L2_PIX_FMT_S5C_UYVY_JPG 	'S5CI' 	三星s5c73mx相机双平面格式，第一个平面包含了交叉的JPEG和UYVY图像数据，然后是UYVY数据集合的元数据。实际指针集合紧跟着交叉的JPEG/UYVY数据，集合成员数与UYVY图像高度相同。每个入口是一个4字节无符号整形数据（大端），且它是到UYVY图像每行单个像素的偏移。第一个平面既可以由JPEG数据块起始，也可以是UYVY数据块。UYVY数据块大小为UYVY图像宽度乘以2。JPEG快大小则依赖于图像和每行的承载量。第二个平面，偏移4084字节，包含了到第一个平面指针集合的4字节偏移。这个偏移量后是一个代表指针集合大小的4字节数值。所有第二平面中的数都是大端排列，其他的在第二平面中的数据值并不确定。通过在第二平面中的信息，可以轻松的找到数据集合的位置，每一帧都不一样，而指针集合大小是常量，与UYVY图像高度相同。为了提取出UYVY和JPEG帧，应用程序可以设置一个数据指针指向第一个平面的起始，然后将第一个入口的偏移添加到指针表中。这样指针就代表了UYVY图像像素行的起始。整个UYVY行可以被拷贝到不连续的缓存中。每一行都要重复以上步骤，重复次数是指针数据集合的数量（即UYVY图像高度）。在UYVY线之间的所有东西都是JPEG数据，他们应该在JPEG流中被连接起来。

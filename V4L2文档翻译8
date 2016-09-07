@@ -1,0 +1,169 @@
+ V4L2文档翻译（八）
+2014-04-14 16:17 1099人阅读 评论(0) 收藏 举报
+分类：
+Linux学习、开发与驱动（20）
+
+目录(?)[+]
+
+http://linuxtv.org/downloads/v4l-dvb-apis/pixfmt.html
+第二节：图像格式
+
+V4L2 API首先是被设计成让设备与应用程序交换图像数据，struct v4l2_pix_format和v4l2_pix_format_mplane结构体定义了内存中图片的格式和布局。早期用作单平面API，后期就用作了多平面版本。图片格式通过VIDIOC_S_FMT ioctl进行协商（这里是对视频捕捉设备和视频输出设备，对于overlay设备的帧缓冲格式见VIDIOC_G_FBUF）。
+
+
+单平面格式结构体
+
+struct v4l2_pix_format
+类型 	成员名 	描述
+__u32 	width 	图片宽度（像素）
+__u32 	height 	图片高度（像素），若field是V4L2_FIELD_TOP、V4L2_FIELD_BOTTOM、V4L2_FIELD_ALTERNATE之一那么高度指的是此区域的行数，否则的话指的是此帧的行数（是区域高度的两倍，因为是隔行扫描）
+__u32 	pixelformat 	像素格式或压缩类型，由应用程序设定
+enum v4l2_field 	field 	视频图像通常是隔行扫描，应用程序可以请求只捕捉或输出顶部或底部区域，或者都是交错/连续的放置在一个缓存中，又或是连续的放置在不同的缓存中。驱动返回实际所选的区域顺序
+__u32 	bytesperline 	两个相邻线最左边的像素相隔几个字节
+__u32 	sizeimage 	驱动设置的一张完整图片在缓存中占用多少个字节，通常等于bytesperline乘以height。若图像由多种长度压缩数据组成，这个值就是处理一张图片的最大字节数
+enum v4l2_colorspace 	colorspace 	这是pixelformat的补充，驱动必须为捕捉流进行设置，输出流要被应用程序设置
+__u32 	priv 	关于格式的自定义保留位，若驱动和应用程序都不使用必须将其设置为0
+
+多平面格式结构体
+
+结构体v4l2_plane_pix_format定义了多面格式中每个面的尺寸和布局，v4l2_pix_format_mplane结构体是v4l2_plane_pix_format结构体的集合，包含了所有面的信息。
+
+struct v4l2_plane_pix_format
+类型 	成员名 	描述
+__u32 	sizeimage 	一面的图像数据最大多少个字节
+__u16 	bytesperline 	两相邻线最左边像素字节距离
+__u16 	reserved[7] 	保留位，应置0
+
+struct v4l2_pix_format_mplane
+类型 	成员名 	描述
+__u32 	width 	图像宽度，像素单位
+__u32 	height 	图像高度，像素单位
+__u32 	pixelformat 	像素格式，单平面和多平面的FourCC都可以
+enum v4l2_field 	field 	见struct v4l2_pix_format
+enum v4l2_colorspace 	colorspace 	见struct v4l2_pix_format
+struct v4l2_plane_pix_format 	plane_fmt[VIDEO_MAX_PLANES 	描述每个平面的结构体集合，有效数量放在num_planes中
+__u8 	num_planes 	平面数量
+__u8 	reserved[11] 	保留位，应用应将其置0
+
+标准图片格式
+
+为了在驱动和应用程序之间交换图像数据，在两边都有标准图像数据是很有必要的。V4L2包含了一些格式，这一章节就来清晰的介绍一下V4L2中支持的标准图像格式。
+
+V4L2驱动并不限于这些格式，驱动自定义特殊格式是有可能的。既然如此，那么应用程序可能就要在依赖于解码器来将图片转换成需要的标准格式，但数据依然可以被保存及恢复成专有格式。比如，一个设备可能支持一个专有的压缩格式。应用程序能够将数据捕捉及保存在压缩格式中，保存在硬盘空间上，然后当视频需要显示的时候使用解码器将其转换成显示器的格式。
+
+尽管如此，最终还是需要一些标准格式的，所以V4L2需要兼容一些较好的标准格式。
+
+V4L2标准主要是非压缩格式，在内存中，像素通常是以从左到右，从上到下的方式进行排列的。图片缓存的第一个字节数据一般在最上边的最左的像素中，然后依次向右，直到最定行的最后一个像素。行中最右边的像素可能是0，或是填充数据以为了保证每行像素数据都对齐。在对齐数据后，若有的话，是第二行最左侧的像素数据，依此类推。最后一行也像其他行一样有一些填充数据。
+
+在V4L2中每个格式都是PIX_FMT_XXX的格式，他们定义在videodev.h头文件中。同样也列举除了FourCC的定义，但是他们却与Windows世界的不同。
+
+对于一些格式来说，数据被存储在隔开的、不连续的内存缓冲中。这些格式有些是FourCC，以及多平面格式。比如，YUV422帧通常存储在一个内存缓冲中，但是还可以放到两个或三个分开的缓冲中，2平面版本中Y部分一个缓冲，CbCr部分在另一个，或3平面版本中每个部分一个缓冲。这些自缓存就被视作“面”。
+
+颜色空间
+介绍
+
+伽马校正（颜色灰度校正）
+
+E'R = f(R)
+E'G = f(G)
+E'B = f(B)
+
+亮度构造和颜色差异信号
+
+E'Y = CoeffR E'R + CoeffG E'G + CoeffB E'B
+(E'R - E'Y) = E'R - CoeffR E'R - CoeffG E'G - CoeffB E'B
+(E'B - E'Y) = E'B - CoeffR E'R - CoeffG E'G - CoeffB E'B
+
+规范化颜色差异信号
+
+颜色差异信号缩减范围[-0.5;+0.5]
+KB = 0.5 / (1 - CoeffB)
+KR = 0.5 / (1 - CoeffR)
+PB = KB (E'B - E'Y) = 0.5 (CoeffR / CoeffB) E'R + 0.5 (CoeffG / CoeffB) E'G + 0.5 E'B
+PR = KR (E'R - E'Y) = 0.5 E'R + 0.5 (CoeffG / CoeffR) E'G + 0.5 (CoeffB / CoeffR) E'B
+
+量化
+
+Y' = (Lum. Levels - 1) · E'Y + Lum. Offset
+CB = (Chrom. Levels - 1) · PB + Chrom. Offset
+CR = (Chrom. Levels - 1) · PR + Chrom. Offset
+在[0;255]范围内舍入为最接近的整数，最终形成YUV图片的Y'CbCr格式。
+
+例2.1 ITU-R Rec. BT.601颜色转换
+
+to YUV
+
+int ER, EG, EB;         /* gamma corrected RGB input [0;255] */
+int Y1, Cb, Cr;         /* output [0;255] */
+
+double r, g, b;         /* temporaries */
+double y1, pb, pr;
+
+int
+clamp (double x)
+{
+    int r = x;      /* round to nearest */
+
+    if (r < 0)         return 0;
+    else if (r > 255)  return 255;
+    else               return r;
+}
+
+r = ER / 255.0;
+g = EG / 255.0;
+b = EB / 255.0;
+
+y1  =  0.299  * r + 0.587 * g + 0.114  * b;
+pb  = -0.169  * r - 0.331 * g + 0.5    * b;
+pr  =  0.5    * r - 0.419 * g - 0.081  * b;
+
+Y1 = clamp (219 * y1 + 16);
+Cb = clamp (224 * pb + 128);
+Cr = clamp (224 * pr + 128);
+
+或更简短些
+
+y1 = 0.299 * ER + 0.587 * EG + 0.114 * EB;
+
+Y1 = clamp ( (219 / 255.0)                    *       y1  + 16);
+Cb = clamp (((224 / 255.0) / (2 - 2 * 0.114)) * (EB - y1) + 128);
+Cr = clamp (((224 / 255.0) / (2 - 2 * 0.299)) * (ER - y1) + 128);
+
+反向转换
+
+int Y1, Cb, Cr;         /* gamma pre-corrected input [0;255] */
+int ER, EG, EB;         /* output [0;255] */
+
+double r, g, b;         /* temporaries */
+double y1, pb, pr;
+
+int
+clamp (double x)
+{
+    int r = x;      /* round to nearest */
+
+    if (r < 0)         return 0;
+    else if (r > 255)  return 255;
+    else               return r;
+}
+
+y1 = (Y1 - 16) / 219.0;
+pb = (Cb - 128) / 224.0;
+pr = (Cr - 128) / 224.0;
+
+r = 1.0 * y1 + 0     * pb + 1.402 * pr;
+g = 1.0 * y1 - 0.344 * pb - 0.714 * pr;
+b = 1.0 * y1 + 1.772 * pb + 0     * pr;
+
+ER = clamp (r * 255); /* [ok? one should prob. limit y1,pb,pr] */
+EG = clamp (g * 255);
+EB = clamp (b * 255);
+
+
+索引格式
+
+每个像素格式在256 ARGB调色板中有一个8位的索引，这只是为视频Overlay输出准备的。没有与调色板相关的ioctl，必须通过Linux framebuffer的API ioctl处理好。
+
+表2.5 索引图片格式
+定义 	码 	Byte 0
+V4L2_PIX_FMT_PAL8 	"PAL8" 	i7 i6 i5 i4 i3 i2 i1 i0

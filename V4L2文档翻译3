@@ -1,0 +1,151 @@
+ V4L2文档翻译（三）
+2014-04-08 23:39 1266人阅读 评论(0) 收藏 举报
+分类：
+Linux学习、开发与驱动（20）
+用户控制
+
+
+设备通常有一些用户可设置的控制器，如亮度和饱和度等等一些会展示在图形用户界面的东西。但不同设备会有不同的可用设置，而且此外其可设置值范围、默认值在不同设备上也不尽相同。控制ioctl提供创造一个良好用户界面的信息和机制，这会让这些控制器在任何设备上都能正确的工作。
+
+所有控制器都需通过ID值进行访问。V4L2定义了一些用于特殊目的的ID。驱动也可以使用V4L2CID_PRIVATE_BASE和更大的值声明其自定义控制器。预定义的ID带有前缀V4L2_CID，在Table 1.1. Control IDs中列出http://linuxtv.org/downloads/v4l-dvb-apis/control.html#control-id
+这些ID用来查询一个控制器的属性、用来获取或设定当前的设置值。
+
+通常应用程序应当明确提出关于他们的目标的一些控制器。每个控制器的名字应该便于理解，如果目标不便理解，驱动开发者应该提供用户文档，用户可用以涉入驱动或开发盘控制程序。预定义ID应介绍一点控制编程，如在通道切换期间使设备静音。
+
+当进行了视频输入输出切换、调制器和调谐器切换、声音输入输出切换后驱动也许会列举出一些不同的控制。不同场景中有不同的默认值、当前值、步进值以及菜单项。拥有自定义ID的控制可以更改自己的名字和类型。控制值是被全局保存的，不会因为切换而改变，甚至当设备打开或关闭时，比如一个调谐radio频率改变，不再外部应用请求的情况下。因为V4L2没有事件机制，所以如果一个panel程序想和其他的panel程序合作的话，就需要有规律的获取控制值来更新用户接口。
+
+附带：色温表（来自http://en.wikipedia.org/wiki/Color_temperature）
+温度 	光源
+1700K 	火柴
+1850K 	烛光、日出、日落
+2700-3300K 	白炽灯
+3000K 	柔（暖）光灯、日光灯
+3200K 	画室灯光
+3350K 	制作室灯光
+4100-4150K 	月光
+5000K 	水平的日光、管灯、冷光灯
+5500-6000K 	竖向日光，电子闪光
+6200K 	氙气闪光灯
+6500K 	阴天
+6500-10500K 	LCD CRT屏幕
+15000-27000 	清纯的蓝色极光
+
+应用程序可以通过VIDIOC_QUERYCTRL和VIDIOC_QUERYMENU ioctl来列举有效的控制，通过VIDIOC_G_CTRL和VIDIOC_S_CTRL来获取和设置控制值。当设备拥有一个或以上的设置时，驱动必须声明VIDIOC_QUERYCTRL、VIDIOC_G_CTRL、VIDIOC_S_CTRL。当有一个或以上的菜单类型控制时还必须其对应驱动还必须声明VIDIOC_QUERYMENU。
+
+例1.8 列举所有控制
+
+struct v4l2_queryctrl queryctrl;
+struct v4l2_querymenu querymenu;
+
+static void
+enumerate_menu (void)
+{
+    printf ("  Menu items:\n");
+
+    memset (&querymenu, 0, sizeof (querymenu));
+    querymenu.id = queryctrl.id;
+
+    for (querymenu.index = queryctrl.minimum;
+         querymenu.index <= queryctrl.maximum;
+          querymenu.index++) {
+        if (0 == ioctl (fd, VIDIOC_QUERYMENU, &querymenu)) {
+            printf ("  %s\n", querymenu.name);
+        }
+    }
+}
+
+memset (&queryctrl, 0, sizeof (queryctrl));
+
+for (queryctrl.id = V4L2_CID_BASE;
+     queryctrl.id < V4L2_CID_LASTP1;
+     queryctrl.id++) {
+    if (0 == ioctl (fd, VIDIOC_QUERYCTRL, &queryctrl)) {
+        if (queryctrl.flags & V4L2_CTRL_FLAG_DISABLED)
+            continue;
+
+        printf ("Control %s\n", queryctrl.name);
+
+        if (queryctrl.type == V4L2_CTRL_TYPE_MENU)
+            enumerate_menu ();
+    } else {
+        if (errno == EINVAL)
+            continue;
+
+        perror ("VIDIOC_QUERYCTRL");
+        exit (EXIT_FAILURE);
+    }
+}
+
+for (queryctrl.id = V4L2_CID_PRIVATE_BASE;;
+     queryctrl.id++) {
+    if (0 == ioctl (fd, VIDIOC_QUERYCTRL, &queryctrl)) {
+        if (queryctrl.flags & V4L2_CTRL_FLAG_DISABLED)
+            continue;
+
+        printf ("Control %s\n", queryctrl.name);
+
+        if (queryctrl.type == V4L2_CTRL_TYPE_MENU)
+            enumerate_menu ();
+    } else {
+        if (errno == EINVAL)
+            break;
+
+        perror ("VIDIOC_QUERYCTRL");
+        exit (EXIT_FAILURE);
+    }
+}
+
+例1.9 更改控制
+
+struct v4l2_queryctrl queryctrl;
+struct v4l2_control control;
+
+memset (&queryctrl, 0, sizeof (queryctrl));
+queryctrl.id = V4L2_CID_BRIGHTNESS;
+
+if (-1 == ioctl (fd, VIDIOC_QUERYCTRL, &queryctrl)) {
+    if (errno != EINVAL) {
+        perror ("VIDIOC_QUERYCTRL");
+        exit (EXIT_FAILURE);
+    } else {
+        printf ("V4L2_CID_BRIGHTNESS is not supported\n");
+    }
+} else if (queryctrl.flags & V4L2_CTRL_FLAG_DISABLED) {
+    printf ("V4L2_CID_BRIGHTNESS is not supported\n");
+} else {
+    memset (&control, 0, sizeof (control));
+    control.id = V4L2_CID_BRIGHTNESS;
+    control.value = queryctrl.default_value;
+
+    if (-1 == ioctl (fd, VIDIOC_S_CTRL, &control)) {
+        perror ("VIDIOC_S_CTRL");
+        exit (EXIT_FAILURE);
+    }
+}
+
+memset (&control, 0, sizeof (control));
+control.id = V4L2_CID_CONTRAST;
+
+if (0 == ioctl (fd, VIDIOC_G_CTRL, &control)) {
+    control.value += 1;
+
+    /* The driver may clamp the value or return ERANGE, ignored here */
+
+    if (-1 == ioctl (fd, VIDIOC_S_CTRL, &control)
+        && errno != ERANGE) {
+        perror ("VIDIOC_S_CTRL");
+        exit (EXIT_FAILURE);
+    }
+/* Ignore if V4L2_CID_CONTRAST is unsupported */
+} else if (errno != EINVAL) {
+    perror ("VIDIOC_G_CTRL");
+    exit (EXIT_FAILURE);
+}
+
+control.id = V4L2_CID_AUDIO_MUTE;
+control.value = TRUE; /* silence */
+
+/* Errors ignored */
+ioctl (fd, VIDIOC_S_CTRL, &control);
+
+

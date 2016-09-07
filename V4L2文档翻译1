@@ -1,0 +1,180 @@
+ V4L2文档翻译（一）
+
+第一节：常见API原理
+
+打开和关闭设备
+
+    设备命名
+    相关设备
+    多重打开
+    共享数据流
+    功能
+
+设备命名
+
+V4L2驱动以内核模块形式存在，可以被系统管理员手动加载或当发现设备时自动加载。驱动被编入videodev模块，其提供帮助函数以及在此文档的一个常用应用接口描述。
+
+每一个驱动注册一个或多个设备节点后他们的主设备号都是81，而子设备号在0~255之间。除非通过CONFIG_VIDEO_FIXED_MINOR_RANGES编译选项编译内核，否则子设备号是动态分配的。而且，子设备号分配范围与设备节点类型有关（video、radio等）。
+
+很多驱动支持通过video_nr，radio_nr或vbi_nr模块设置来选择特殊的video/radio/vbi节点号。这就允许用户申请指定的设备节点名称，如/dev/video5而不是交给系统生成。当驱动支持多个同类设备有多余一个设备节点号时候，可如下：
+
+>modprobe mydriver video_nr=0,1 radio_nr=0,1
+
+在/etc/modules.conf中可以这样写：
+
+options mydriver video_nr=0,1 radio_nr=0,1
+
+如果在模块设置中没有给定设备节点号则驱动会默认进行分配。
+
+通常情况下udev会为你在/dev下自动创建设备节点。如果udev没有安装，那么你需要使能CONFIG_VIDEO_FIXED_MINOR_RANGES内核选项，这样就可以将子设备号设定为设备节点号了，即子设备号5同样会使设备节点名为video5。此特性会使不同类型设备拥有不同范围的子设备号。这些范围在第四节：接口中将给出。（不绕弯子了，我这里给直接列出来）
+类型 	范围
+video 	0~63
+vbi 	224~255
+vtx 	192~223
+radio 	64~127
+SDR 	0~255
+
+特殊文件的创建（用mknod）是一个特殊操作，而且这些设备不能通过主设备号和子设备号打开。这意味着应用程序不能扫描加载上的或安装上的驱动。用户必须敲入一个设备名，或者说应用程序可以尝试使用常规的设备名称。
+相关设备
+
+设备可以支持好几个功能，如视频捕捉、VBI捕捉以及无线广播。
+
+V4L2 API为这些功能分别创建不同的设备节点。
+
+V4L2 API被设计成一个设备节点可以支持所有功能。不过实际上这却从来没有奏效过：应用程序从来没有使用过这项特性，而且许多驱动也没有支持此特性，就算他们支持了也从来没有被测试过。另外，在不同功能间切换设备节点只是在使用流数据IO API时需要，并不能用read()/write() API。
+
+如今每个设备节点只支持一个功能。
+
+除了视频输入、输出外硬件还可能同时支持声音取样和播放。如果这样的话，这些功能要以ALSA PCM设备形式存在。
+
+所有这些设备有一个问题，就是V4L2 API并没有提供找到相关设备的规则。有些确实很复杂的设备使用多媒体控制器来达到这个目的。但是大多数设备并不用它，现存的一些代码表示他们使用sysfs来发现相关设备，还没有一个库可以为使用多媒体控制器的设备和没使用的设备提供一个单一的API。如果你想来从事这个工作的话请先写一封邮件到此邮件列表：http://www.linuxtv.org/lists.php
+多重打开
+
+V4L2设备可以被打开超过一次。一旦驱动支持这样做，用户就可以像这样使用：开启一个表盘程序来控制比如亮度或声音音量，然后另一个程序来捕捉视频和音频。换句话说，就是表盘程序相当于ALSA声音混合程序。只是打开一个V4L2设备并不会改变设备的状态。
+
+当一个应用程序因为需要流数据而申请了内存空间后（通过VIDIOC_REQBUFS或VIDIOC_CREATE_BUFS ioctl，或通过read()或write()函数）这个程序（文件句柄）就成为了此设备的拥有者。再不会允许对内存空间大小做改动的动作（VIDIOC_S_FMT ioctl动作），而且其他应用再不被允许申请内存或开始、停止数据流，一旦这样做了会返回EBUSY错误代码。
+
+只是打开V4L2设备不会允许独占访问。无论对请求类型数据分配的权限是读还是写，初始化数据都会发生交换，而且对文件句柄来说还会改变相关属性。应用程序可以通过使用优先级机制请求附加特选。
+共享数据流
+
+V4L2驱动不支持多个应用通过拷贝缓存的方式在同一设备上读写同一数据流，或时间复用，或其他类似方式。在用户空间使用代理程序处理这种情况会更好。
+功能
+
+应用程序可以使用open()和close()对V4L2设备执行打开和关闭操作。设备可以通过ioctl编程来完成接下来的章节所讲述的内容。
+功能查询
+
+因为V4L2涵盖了各种各样的设备，但并不是所有类型的设备都可以使用各种API。此外，相同类型的设备也可能拥有不同的功能以及允许省略一点复杂或并不太重要的API。
+
+VIDIOC_QUERYCAP ioctl命令可以查看内核设备对规范的兼容有效性，查询功能和IO方法都是需要设备支持的。
+
+从内核版本3.1开始，VIDIOC_QUERYCAP将会返回V4L2 API版本，通常是与内核版本匹配的。没有必要通过VIDIOC_QUERTCAP检查一个特殊的ioctl是否支持，如果驱动不支持V4L2会返回ENOTTY错误码。
+
+可以通过不同的ioctl查询其他特性，如通过VIDIOC_ENUMINPUT查询设备视频连接器的数量、类型及名字。尽管API的目的主要是抽象，VIDIOC_QUERYCAP ioctl仍然允许驱动透过特殊应用程序来实现个性化。
+
+所有V4L2驱动都必须支持VIDIOC_QUERYCAP，应用程序往往在打开设备后就执行这个ioctl。
+程序优先级
+
+当多个应用程序共享同一个设备时，需要给他们分配不同的优先级。相反的一个视频录制应用程序执行如rm -rf /这类命令可能会阻塞其他程序改变视频控制或切换当前TV频道。另一个目的是允许低优先级应用程序工作在后台，这样用户控制程序就可以优先并能够在稍后自动恢复设备控制。
+
+由于这些特性不能在完全在用户空间施行，所以V4L2定义了VIDIOC_G_PRIORITY和VIDIOC_S_PRIORITY ioctl来通过文件描述符申请和查询准入优先级。驱动不支持这些ioctl的情况下，打开一个设备会分配一个中等级优先级，这与早起版本的V4L2兼容。当应用程序通过VIDIOC_QUERYCAP ioctl查询完功能后可以通过VIDIOC_S_PRIORITY请求不同的优先级。
+
+如VIDIOC_S_INPUT等这种会改变驱动属性的ioctl在其他程序申请了更高的优先级后会返回EBUSY错误码。
+视频输入和输出
+
+视频输入输出一个设备的物理连线。如RF连线（天线、电缆），视频连线，或RGB连线。视频和VBI捕捉设备需要输入，而视频和VBI输出设备需要输出，至少各一个。Radio无限通讯设备并没有视频输入输出。
+
+应用程序可以通过VIDIOC_ENUMINPUT和VIDIOC_ENUMOUTPUT ioctl来查看有效输入和输出的数量和属性。VIDIOC_ENUMINPUT ioctl会返回v4l2_input结构体，也会返回被查询的视频输入设备的状态信息。
+
+VIDIOC_G_INPUT和VIDIOC_G_OUTPUT ioctl将会返回当前视频输入或输出的索引。应用程序可以通过VIDIOC_S_INPUT和VIDIOC_S_OUTPUT ioctl来选择不同输入或输出。设备若拥有一个或多个的输入、输出，则必须在驱动中声明所有的输入、输出ioctl。
+
+例 1.1 当前视频输入的信息
+
+struct v4l2_input input;
+int index;
+
+if (-1 == ioctl(fd, VIDIOC_G_INPUT, &index)) {
+    perror("VIDIOC_G_INPUT");
+    exit(EXIT_FAILURE);
+}
+
+memset(&input, 0, sizeof(input));
+input.index = index;
+
+if (-1 == ioctl(fd, VIDIOC_ENUMINPUT, &input)) {
+    perror("VIDIOC_ENUMINPUT");
+    exit(EXIT_FAILURE);
+}
+
+printf("Current input: %s\n", input.name);
+
+例 1.2 切换到第一个视频输入
+
+int index;
+
+index = 0;
+
+if (-1 == ioctl(fd, VIDIOC_S_INPUT, &index)) {
+    perror("VIDIOC_S_INPUT");
+    exit(EXIT_FAILURE);
+}
+
+音频输入和输出
+
+音频输入和输出是设备的物理连线。视频捕捉设备会有输入，输出设备会有输出，零个或每个多个。Radio无线通讯设备没有声音输入和输出。他们都会拥有正好一个调谐器，事实上就是一个声源，但是API只将视频输入或输出与调谐器关联起来，而radio设备没有。TV卡上用来接收声音信号给声卡的连接器并不被视为是声音输出。
+
+声音和视频输入输出是相互关联的。选择一个视频源的同时也会选择一个声音源。当视频和声音的源是一个调谐器的时候这就最明显不过了。将来声音连机器将会和一个以上的视频输入或输出结合。假设有两个混合的视频输入和两个音频输入存在，就会有最多四种有效组合。关于视频和声音的联系在结构体v4l2_input或v4l2_output的audioset中有所体现，每一位代表一个索引号，从0开始。
+
+应用程序通过VIDIOC_ENUMAUDIO和VIDIOC_ENUMAUDOUT ioctl来列举关于有效输入输出的数量和属性。VIDIOC_ENUMAUDIO ioctl返回结构体v4l2_audio，同时包含当前所查询的音频输入信号状态。
+
+VIDIOC_G_AUDIO和VIDIOC_G_AUDOUT ioctl会报告当前音频输入和输出。这里需要注意，VIDIOC_ENUMAUDIO和VIDIOC_ENUMAUDOUT所做的并不像VIDIOC_G_INPUT和VIDIOC_G_OUTPUT只是返回索引而已。
+
+应用程序可以通过VIDIOC_S_AUDIO ioctl来选择音频输入以及改变它的属性。VIDIOC_S_AUDOUT ioctl应用选择音频输出（目前没有什么可以改变的属性）。
+
+当设备应用多个可选择的音频输入和输出时必须在驱动中声明所有声音输入、输出ioctl。若设备拥有任何音频输入或输入的话，驱动必须在v4l2_capability中设置V4L2_CAP_AUDIO标签，这样可以被VIDIOC_QUERYCAP ioctl查询到。
+
+例 1.3 当前声音输入相关信息
+
+struct v4l2_audio audio;
+
+memset(&audio, 0, sizeof(audio));
+
+if (-1 == ioctl(fd, VIDIOC_G_AUDIO, &audio)) {
+    perror("VIDIOC_G_AUDIO");
+    exit(EXIT_FAILURE);
+}
+
+printf("Current input: %s\n", audio.name);
+
+例 1.4 切换到第一个音频输入
+
+struct v4l2_audio audio;
+
+memset(&audio, 0, sizeof(audio)); /* clear audio.mode, audio.reserved */
+
+audio.index = 0;
+
+if (-1 == ioctl(fd, VIDIOC_S_AUDIO, &audio)) {
+    perror("VIDIOC_S_AUDIO");
+    exit(EXIT_FAILURE);
+}
+
+调谐器和调制器
+调谐器
+
+视频输入设备可以拥有一个或多个调谐器来解调一个RF信号。每个调谐器关联一个或多个视频输入，这依赖于调谐器的RF连线数量。通过VIDIOC_ENUMINPUT ioctl返回的v4l2_input结构体中中的type成员是V4L2_INPUT_TYPE_TUNER，tuner成员包含了调谐器的索引号。
+
+Radio无线通讯输入设备有一个调谐器，索引号为0，没有任何视频输入。
+
+应用程序可以通过VIDIOC_G_TUNER和VIDIOC_S_TUNER ioctl来查询和改变调谐器属性。当当前视频或radio输入被查询时，VIDIOC_G_TUNER所返回的v4l2_tuner结构体也包含了信号状态信息。注意，当拥有一个以上调谐器的时候，VIDIOC_S_TUNER并不会切换当前调谐器。使用哪个调谐器只由当前视频输入决定。若设备拥有一个或以上的调谐器的时候，必须支持这些ioctl，且要在v4l2_capability结构体中设置V4L2_CAP_TUNER标签。
+调制器
+
+视频输出设备可以有一个或以上的调制器，调制TV天线接收或者视频录制的视频信号。每个调制器可跟一个或多个视频输出关联，这取决于调制器上有多少个RF连接线。通过VIDIOC_ENUMOUTPUT ioctl返回的v4l2_output结构体中type成员代表V4L2_OUTPUT_TYPE_MODULATOR，modulator成员包含调制器的索引。
+
+Radio输出设备有一个索引号为0的调制器，没有视频输出。
+
+一个视频或无线设备不可能同时支持调制器和调谐器。这样的硬件需要两个完全分开的设备节点，一个支持调谐器功能，另一个支持调制器功能。这样的原因是因为通过VIDIOC_S_FREQUENCY ioctl的频率将无法判断是调制器的还是调谐器的。
+
+应用程序可以使用VIDIOC_G_MODULATOR和VIDIOC_S_MODULATOR ioctl来查询和改变调制器属性。当有一个以上调制器的时候，VIDIOC_S_MODULATOR并不会进行切换。当前的视频输出决定使用哪个调制器。若设备拥有一个或以上的调制器，则其驱动必须支持这些ioctl，并在v4l2_capability结构体中设置V4L2_CAP_MODULATOR标签。
+Radio频率
+
+应用程序可以通过VIDIOC_G_FREQUENCY和VIDIOC_S_FREQUENCY ioctl来获取和设置调谐器或调制器的无线频率，其参数均为v4l2_frequency结构体。对TV和Radio设备这些ioctl使用方法一样。当调制器或调谐器的ioctl被支持，或是当设备是一个radio无线设备的话，驱动必须支持这些ioctl。
