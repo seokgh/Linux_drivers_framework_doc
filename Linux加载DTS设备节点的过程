@@ -1,0 +1,169 @@
+Linux加载DTS设备节点的过程(以高通8974平台为例)
+
+ DTS是Device Tree Source的缩写，用来描述设备的硬件细节。
+ 
+在过去的ARM Linux中，arch/arm/plat-xxx和arch/arm/mach-xxx中充斥着大量的垃圾代码，相当多数的代码只是在描述板级细节，而这些板级细节对于内核来讲，不过是垃圾，如板上的platform设备、resource、i2c_board_info、spi_board_info以及各种硬件的platform_data。为了去掉这些垃圾代码，Linux采用DTS这种新的数据结构来描述硬件设备。
+采用Device Tree后，许多硬件的细节可以直接透过它传递给Linux，而不再需要在kernel中进行大量的冗余编码。
+有关DTS的语法格式，网上有很多资料。
+       
+       
+       
+本文主要讲Linux是怎样加载DTS设备节点的流程。
+
+下面以高通QCT8974平台（Linux内核）为例进行讲解：
+
+
+
+（1）使用DTS注册平台总线的过程
+       在讲注册过程之前，我们先看看DTS是怎样描述平台总线结构的，以i2c总线为例:
+
+/ {  
+    model = "Qualcomm MSM 8974";  
+    compatible = "qcom,msm8974";  
+    interrupt-parent = <&intc>;  
+  
+    aliases {  
+        spi0 = &spi_0;  
+        spi7 = &spi_7;  
+        sdhc1 = &sdhc_1; /* SDC1 eMMC slot */  
+        sdhc2 = &sdhc_2; /* SDC2 SD card slot */  
+        sdhc3 = &sdhc_3; /* SDC3 SDIO slot */  
+        sdhc4 = &sdhc_4; /* SDC4 SDIO slot */  
+    };  
+  
+    memory {  
+  
+        secure_mem: secure_region {  
+            linux,contiguous-region;  
+            reg = <0 0x7800000="">;  
+            label = "secure_mem";  
+        };  
+  
+        adsp_mem: adsp_region {  
+            linux,contiguous-region;  
+            reg = <0 0x2000000="">;  
+            label = "adsp_mem";  
+        };  
+    };  
+  
+    intc: interrupt-controller@F9000000 {  
+        compatible = "qcom,msm-qgic2";  
+        interrupt-controller;  
+        #interrupt-cells = <3>;  
+        reg = <0xf9000000 0x1000="">,  
+              <0xf9002000 0x1000="">;  
+    };  
+  
+    msmgpio: gpio@fd510000 {  
+        compatible = "qcom,msm-gpio";  
+        gpio-controller;  
+        #gpio-cells = <2>;  
+        interrupt-controller;  
+        #interrupt-cells = <2>;  
+        reg = <0xfd510000 0x4000="">;  
+        ngpio = <146>;  
+        interrupts = <0 208="" 0="">;  
+        qcom,direct-connect-irqs = <8>;  
+    };  
+  
+    wcd9xxx_intc: wcd9xxx-irq {  
+        compatible = "qcom,wcd9xxx-irq";  
+        interrupt-controller;  
+        #interrupt-cells = <1>;  
+        interrupt-parent = <&msmgpio>;  
+        interrupts = <72 0="">;  
+        interrupt-names = "cdc-int";  
+    };  
+  
+    timer {  
+        compatible = "arm,armv7-timer";  
+        interrupts = <1 2="" 0="" 1="" 3="" 0="">;  
+        clock-frequency = <19200000>;  
+    };  
+  
+    i2c_0: i2c@f9967000 { /* BLSP#11 */  
+        cell-index = <0>;  
+        compatible = "qcom,i2c-qup";  
+        reg = <0xf9967000 0x1000="">;  
+        #address-cells = <1>;  
+        #size-cells = <0>;  
+        reg-names = "qup_phys_addr";  
+        interrupts = <0 105="" 0="">;  
+        interrupt-names = "qup_err_intr";  
+        qcom,i2c-bus-freq = <100000>;  
+        qcom,i2c-src-freq = <50000000>;  
+    };  
+  
+    i2c_2: i2c@f9924000 {  
+        cell-index = <2>;  
+        compatible = "qcom,i2c-qup";  
+        reg = <0xf9924000 0x1000="">;  
+        #address-cells = <1>;  
+        #size-cells = <0>;  
+        reg-names = "qup_phys_addr";  
+        interrupts = <0 96="" 0="">;  
+        interrupt-names = "qup_err_intr";  
+        qcom,i2c-bus-freq = <100000>;  
+        qcom,i2c-src-freq = <50000000>;  
+    };  
+  
+    spi_0: spi@f9923000 {  
+        compatible = "qcom,spi-qup-v2";  
+        reg = <0xf9923000 0x1000="">;  
+        interrupts = <0 95="" 0="">;  
+        spi-max-frequency = <19200000>;  
+        #address-cells = <1>;  
+        #size-cells = <0>;  
+        gpios = <&msmgpio 3 0>, /* CLK  */  
+            <&msmgpio 1 0>, /* MISO */  
+            <&msmgpio 0 0>; /* MOSI */  
+        cs-gpios = <&msmgpio 9 0>;  
+    };  
+  
+};  
+
+从上面可知，系统平台上挂载了很多总线，如i2c、spi、uart等等，每一个总线分别被描述为一个节点。Linux在启动后，到C入口时，会执行以下操作，加载系统平台上的总线和设备：
+start_kernel() --> setup_arch() --> unflatten_device_tree() 
+unflatten_device_tree()的代码如下：
+
+
+void __init unflatten_device_tree(void)  
+{  
+    __unflatten_device_tree(initial_boot_params, &allnodes,  
+                early_init_dt_alloc_memory_arch);  
+  
+    /* Get pointer to "/chosen" and "/aliasas" nodes for use everywhere */  
+    of_alias_scan(early_init_dt_alloc_memory_arch);  
+}
+
+ 在执行完unflatten_device_tree()后，DTS节点信息被解析出来，保存到allnodes链表中，allnodes会在后面被用到。
+随后，当系统启动到board文件时，会调用.init_machine，高通8974平台对应的是msm8974_init()。接着调用of_platform_populate(....)接口，加载平台总线和平台设备。至此，系统平台上的所有已配置的总线和设备将被注册到系统中。注意：不是dtsi文件中所有的节点都会被注册，在注册总线和设备时，会对dts节点的状态作一个判断，如果节点里面的status属性没有被定义，或者status属性被定义了并且值被设为“ok”或者“okay”，其他情况则不被注册到系统中。
+
+
+
+
+（2）使用DTS注册总线设备的过程
+
+    上面讲了Linux怎样使用DTS注册平台总线和平台设备到系统中，那么其他设备，例如i2c、spi设备是怎样注册到系统中的呢？
+
+
+下面我们就以i2c设备为例，讲解Linux怎样注册i2c设备到系统中。
+
+ 以高通8974平台为例，在注册i2c总线时，会调用到qup_i2c_probe()接口，该接口用于申请总线资源和添加i2c适配器。
+ 在成功添加i2c适配器后，会调用of_i2c_register_devices()接口。此接口会解析i2c总线节点的子节点（挂载在该总线上的i2c设备节点），
+ 获取i2c设备的地址、中断号等硬件信息。
+ 然后调用request_module()加载设备对应的驱动文件，调用i2c_new_device()，生成i2c设备。
+ 此时设备和驱动都已加载，于是drvier里面的probe方法将被调用。后面流程就和之前一样了。
+
+
+
+
+
+
+简而言之，Linux采用DTS描述设备硬件信息后，省去了大量板文件垃圾信息。
+Linux在开机启动阶段，会解析DTS文件，保存到全局链表allnodes中，在掉用.init_machine时，会跟据allnodes中的信息注册平台总线和设备。
+
+值得注意的是，加载流程并不是按找从树根到树叶的方式递归注册，而是只注册根节点下的第一级子节点，第二级及之后的子节点暂不注册。
+
+Linux系统下的设备大多都是挂载在平台总线下的，因此在平台总线被注册后，会根据allnodes节点的树结构，去寻找该总线的子节点，所有的子节点将被作为设备注册到该总线上。
+
