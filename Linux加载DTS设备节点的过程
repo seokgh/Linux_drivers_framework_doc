@@ -2,20 +2,23 @@ Linux加载DTS设备节点的过程(以高通8974平台为例)
 
  DTS是Device Tree Source的缩写，用来描述设备的硬件细节。
  
-在过去的ARM Linux中，arch/arm/plat-xxx和arch/arm/mach-xxx中充斥着大量的垃圾代码，相当多数的代码只是在描述板级细节，而这些板级细节对于内核来讲，不过是垃圾，如板上的platform设备、resource、i2c_board_info、spi_board_info以及各种硬件的platform_data。为了去掉这些垃圾代码，Linux采用DTS这种新的数据结构来描述硬件设备。
+在过去的ARM Linux中，arch/arm/plat-xxx和arch/arm/mach-xxx中充斥着大量的垃圾代码，相当多数的代码只是在描述板级细节，而这些板级细节对于内核来讲，
+不过是垃圾，如板上的platform设备、resource、i2c_board_info、spi_board_info以及各种硬件的platform_data。
+
+为了去掉这些垃圾代码，Linux采用DTS这种新的数据结构来描述硬件设备。
+
 采用Device Tree后，许多硬件的细节可以直接透过它传递给Linux，而不再需要在kernel中进行大量的冗余编码。
 有关DTS的语法格式，网上有很多资料。
        
-       
-       
 本文主要讲Linux是怎样加载DTS设备节点的流程。
+
+
+
 
 下面以高通QCT8974平台（Linux内核）为例进行讲解：
 
-
-
 （1）使用DTS注册平台总线的过程
-       在讲注册过程之前，我们先看看DTS是怎样描述平台总线结构的，以i2c总线为例:
+       讲注册过程之前，先看看DTS是怎样描述平台总线结构的，以i2c总线为例:
 
 / {  
     model = "Qualcomm MSM 8974";  
@@ -122,11 +125,16 @@ Linux加载DTS设备节点的过程(以高通8974平台为例)
   
 };  
 
-从上面可知，系统平台上挂载了很多总线，如i2c、spi、uart等等，每一个总线分别被描述为一个节点。Linux在启动后，到C入口时，会执行以下操作，加载系统平台上的总线和设备：
+从上面可知，系统平台上挂载了很多总线，如i2c、spi、uart等等，[每一个总线,分别被描述为一个节点!!!]
+
+Linux在启动后，到C入口时，会执行以下操作，加载系统平台上的总线和设备：
+
 start_kernel() --> setup_arch() --> unflatten_device_tree() 
+
+
+
+
 unflatten_device_tree()的代码如下：
-
-
 void __init unflatten_device_tree(void)  
 {  
     __unflatten_device_tree(initial_boot_params, &allnodes,  
@@ -137,14 +145,20 @@ void __init unflatten_device_tree(void)
 }
 
  在执行完unflatten_device_tree()后，DTS节点信息被解析出来，保存到allnodes链表中，allnodes会在后面被用到。
-随后，当系统启动到board文件时，会调用.init_machine，高通8974平台对应的是msm8974_init()。接着调用of_platform_populate(....)接口，加载平台总线和平台设备。至此，系统平台上的所有已配置的总线和设备将被注册到系统中。注意：不是dtsi文件中所有的节点都会被注册，在注册总线和设备时，会对dts节点的状态作一个判断，如果节点里面的status属性没有被定义，或者status属性被定义了并且值被设为“ok”或者“okay”，其他情况则不被注册到系统中。
+随后，当系统启动到board文件时，会调用.init_machine，高通8974平台对应的是msm8974_init()。
+接着调用of_platform_populate(....)接口，加载平台总线和平台设备。
+
+至此，系统平台上的所有已配置的总线和设备将被注册到系统中。
+
+注意：不是dtsi文件中所有的节点都会被注册，在注册总线和设备时，会对dts节点的状态作一个判断，如果节点里面的status属性没有被定义，
+或者status属性被定义了并且值被设为“ok”或者“okay”，其他情况则不被注册到系统中。
 
 
 
 
 （2）使用DTS注册总线设备的过程
 
-    上面讲了Linux怎样使用DTS注册平台总线和平台设备到系统中，那么其他设备，例如i2c、spi设备是怎样注册到系统中的呢？
+    上面讲了Linux怎样使用DTS注册 [平台总线] 和 [平台设备] 到系统中，那么其他设备，例如i2c、spi设备是怎样注册到系统中的呢？
 
 
 下面我们就以i2c设备为例，讲解Linux怎样注册i2c设备到系统中。
@@ -165,5 +179,6 @@ Linux在开机启动阶段，会解析DTS文件，保存到全局链表allnodes�
 
 值得注意的是，加载流程并不是按找从树根到树叶的方式递归注册，而是只注册根节点下的第一级子节点，第二级及之后的子节点暂不注册。
 
-Linux系统下的设备大多都是挂载在平台总线下的，因此在平台总线被注册后，会根据allnodes节点的树结构，去寻找该总线的子节点，所有的子节点将被作为设备注册到该总线上。
+Linux系统下的设备大多都是挂载在平台总线下的，因此在平台总线被注册后，会根据allnodes节点的树结构，去寻找该总线的子节点，
+所有的子节点将被作为设备注册到该总线上。
 
