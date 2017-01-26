@@ -70,7 +70,7 @@ mylist_head的next、prev指针都初始化为指向自己。这样，就有了�
 
    5、链表的应用
          一个用以创建、增加、删除和遍历一个双向链表的Linux内核模块
-点击(此处)折叠或打开
+
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/slab.h>
