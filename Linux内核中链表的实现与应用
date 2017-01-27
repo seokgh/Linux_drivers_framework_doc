@@ -135,7 +135,7 @@ static void __exit doublelist_exit(void)
     list_for_each_safe(pos, n, &numhead.list) {
         //为了安全删除结点而进行的遍历
         list_del(pos); //从链表中删除当前结点
-        p = list_entry(pos, struct numlist, llist); 
+        p = list_entry(pos, struct numlist, list); 
         //得到当前数据结点的首地址，即指针
         kfree(p); //释放该数据结点所占空间
         printk("Node %d has removed from the doublelist...\n", i++);
