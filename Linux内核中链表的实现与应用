@@ -48,7 +48,7 @@ mylist_head的next、prev指针都初始化为指向自己。这样，就有了�
             {
                     __list_add(new, head, head -> next) ;
             }
-            static inline void list_add_tail(struct list_head 8new, struct list_head *head)
+            static inline void list_add_tail(struct list_head *new, struct list_head *head)
             {
                      __list_add(new, head -> prev, head) ;
             }
