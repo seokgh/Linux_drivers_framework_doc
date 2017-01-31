@@ -30,9 +30,10 @@
 ////////////////////////////////
 kthread_stop： 设置线程的退出标记（线程函数内应用int kthread_should_stop(void)函数，当返回真时应退出函数），
 
-kthread_stop会一直等待至线程结束，线程结束前会发送完成结束给kthread_stop,如果直接使用do_exit直接退出线程
-那么kthread_stop不会收到完成信号将一直等待下去。如果线程已经退出那么kthread_stop会先设置退出标记再唤醒一下thread，
-唤醒线程后会判断退出标记因此设定的处理函数不会被调用。如果线程已经被唤醒并已经退出那么kthread_stop会一直等待。
+kthread_stop会一直等待至线程结束，线程结束前会发送[完成结束]给kthread_stop,如果直接使用do_exit直接退出线程
+那么kthread_stop不会收到完成信号,将一直等待下去。
+如果线程已经退出那么kthread_stop会先设置退出标记再唤醒一下thread，唤醒线程后会判断退出标记, 因此设定的处理函数不会被调用。
+如果线程已经被唤醒并已经退出那么kthread_stop会一直等待。
 
 int kthread_stop(struct task_struct *thread);  
 如果处理函数没用kthread_should_stop判断退出，那么 kthread_stop会一直等待处理函数主动退出。  
@@ -42,7 +43,6 @@ int kthread_stop(struct task_struct *thread);
 三 源码分析 
 ////////////////////////////////
 这里使用的内核版本是2.6.21.5
-
 
 3.1 管理调度其它的内核线程的线程kthread
           
