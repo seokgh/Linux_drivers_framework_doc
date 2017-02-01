@@ -14,23 +14,22 @@ int kthread_should_stop(void);
 1. kthread_run()负责内核线程的创建，参数包括入口函数 threadfn，参数data，线程名称namefmt。可以看到线程的名字可以是类似sprintf方式组成的字符串。如果实际看到 kthread.h文件，就会发现kthread_run实际是一个宏定义，它由kthread_create()和wake_up_process() 两部分组成，这样的好处是用kthread_run()创建的线程可以直接运行，使用方便。
 
 
-2. kthread_stop()负责结束创建的线程，参数是创建时返回的task_struct指针。kthread设置标志should_stop，并等 待线程主动结束，返回线程的返回值。线程可能在kthread_stop()调用前就结束。（经过实际验证，如果线程在kthread_stop()调用 之前就结束，之后kthread_stop()再调用会发生可怕地事情—调用kthread_stop()的进程crash！！之所以如此，是由于 kthread实现上的弊端，之后会专门写文章讲）
+2. kthread_stop()负责结束创建的线程，参数是创建时返回的task_struct指针。kthread设置标志should_stop，并等待线程主动结束，返回线程的返回值。线程可能在kthread_stop()调用前就结束。（经过实际验证，如果线程在kthread_stop()调用之前就结束，之后kthread_stop()再调用会发生可怕地事情—调用kthread_stop()的进程crash！！之所以如此，是由于 kthread实现上的弊端，之后会专门写文章讲）
 
 
 3. kthread_should_stop()返回should_stop标志。它用于创建的线程检查结束标志，并决定是否退出。线程完全可以在完成自己的工作后主动结束，不需等待should_stop标志。
 
 
 
-
-下面就来尝试一下运行不息的内核线程：
-
-
+////////////////////////////////////
+尝试一下运行不息的内核线程：
+////////////////////////////////////
 #include <linux/init.h>  
 #include <linux/module.h>  
 #include <linux/kthread.h>  
  
 MODULE_LICENSE("Dual BSD/GPL"); 
- 
+
 staticstruct task_struct *tsk; 
  
 staticint thread_function(void *data) 
@@ -47,7 +46,7 @@ staticint hello_init(void)
 { 
     printk(KERN_INFO "Hello, world!\n"); 
  
-    tsk = kthread_run(thread_function, NULL, "mythread%d", 1); 
+    tsk = kthread_run(thread_function, NULL, "shi_thread%d", 1); 
     if (IS_ERR(tsk)) { 
         printk(KERN_INFO "create kthread failed!\n"); 
     } 
@@ -78,12 +77,13 @@ module_exit(hello_exit);
 这里要注意的是kthread_run的返回值tsk。不能用tsk是否为NULL进行检查，而要用IS_ERR()宏定义检查，这是因为返回的是错误码，
 大致从0xfffff000~0xffffffff。
 
+3、编译运行该模块，使用ps -e命令，就可以看到有名字为 shi_thread1 的内核线程在运行。
 
 
-3、编译运行该模块，使用ps -e命令，就可以看到有名字为 mythread1 的内核线程在运行。
+
 
 总结： 
-	  在内核中，创建一大堆的线程，现在已经易如反掌。所以模块的拓展空间是无限的。
+      在内核中，创建一大堆的线程，现在已经易如反掌。所以模块的拓展空间是无限的。
 
       kthread的实现在kernel/kthread.c中，头文件是include/linux/kthread.h。
       
