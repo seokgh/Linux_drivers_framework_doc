@@ -1,23 +1,23 @@
-Ò». V4L2¿ò¼Ü: video for linux version 2
+ä¸€. V4L2æ¡†æ¶: video for linux version 2
 
 
-ĞéÄâÊÓÆµÇı¶¯vivi.c·ÖÎö:
-1£®·ÖÅävideo_device
-2£®ÉèÖÃ
-3£®×¢²á£ºvideo_register_device
+è™šæ‹Ÿè§†é¢‘é©±åŠ¨vivi.cåˆ†æ:
+1ï¼åˆ†é…video_device
+2ï¼è®¾ç½®
+3ï¼æ³¨å†Œï¼švideo_register_device
 
 vivi_init
     vivi_create_instance
-        v4l2_device_register   // ²»ÊÇÖ÷Òª, Ö»ÊÇÓÃÓÚ³õÊ¼»¯Ò»Ğ©¶«Î÷£¬±ÈÈç×ÔĞıËø¡¢ÒıÓÃ¼ÆÊı
+        v4l2_device_register   // ä¸æ˜¯ä¸»è¦, åªæ˜¯ç”¨äºåˆå§‹åŒ–ä¸€äº›ä¸œè¥¿ï¼Œæ¯”å¦‚è‡ªæ—‹é”ã€å¼•ç”¨è®¡æ•°
         video_device_alloc
-        // ÉèÖÃ
+        // è®¾ç½®
           1. vfd:
             .fops           = &vivi_fops,
             .ioctl_ops 	= &vivi_ioctl_ops,
             .release	= video_device_release,
           2.
             vfd->v4l2_dev = &dev->v4l2_dev;
-          3. ÉèÖÃ"ctrlÊôĞÔ"(ÓÃÓÚAPPµÄioctl)£º
+          3. è®¾ç½®"ctrlå±æ€§"(ç”¨äºAPPçš„ioctl)ï¼š
             	v4l2_ctrl_handler_init(hdl, 11);
             	dev->volume = v4l2_ctrl_new_std(hdl, &vivi_ctrl_ops,
             			V4L2_CID_AUDIO_VOLUME, 0, 255, 1, 200);
@@ -38,12 +38,12 @@ vivi_init
                 
                 
 
-·ÖÎövivi.cµÄopen,read,write,ioctl¹ı³Ì
+åˆ†ævivi.cçš„open,read,write,ioctlè¿‡ç¨‹
 1. open
 app:     open("/dev/video0",....)
 ---------------------------------------------------
 drv:     v4l2_fops.v4l2_open
-            vdev = video_devdata(filp);  // ¸ù¾İ´ÎÉè±¸ºÅ´ÓÊı×éÖĞµÃµ½video_device
+            vdev = video_devdata(filp);  // æ ¹æ®æ¬¡è®¾å¤‡å·ä»æ•°ç»„ä¸­å¾—åˆ°video_device
             ret = vdev->fops->open(filp);
                         vivi_ioctl_ops.open
                             v4l2_fh_open
@@ -66,9 +66,9 @@ drv:   v4l2_fops.unlocked_ioctl
                                 video_usercopy(file, cmd, arg, __video_do_ioctl);
                                     __video_do_ioctl
                                         struct video_device *vfd = video_devdata(file);
-                                        ¸ù¾İAPP´«ÈëµÄcmdÀ´»ñµÃ¡¢ÉèÖÃ"Ä³Ğ©ÊôĞÔ"
+                                        æ ¹æ®APPä¼ å…¥çš„cmdæ¥è·å¾—ã€è®¾ç½®"æŸäº›å±æ€§"
 
-v4l2_ctrl_handlerµÄÊ¹ÓÃ¹ı³Ì:
+v4l2_ctrl_handlerçš„ä½¿ç”¨è¿‡ç¨‹:
     __video_do_ioctl
         struct video_device *vfd = video_devdata(file);
 
@@ -78,39 +78,39 @@ v4l2_ctrl_handlerµÄÊ¹ÓÃ¹ı³Ì:
     
     		if (vfh && vfh->ctrl_handler)
     			ret = v4l2_queryctrl(vfh->ctrl_handler, p);
-    		else if (vfd->ctrl_handler)  // ÔÚÄÄÉèÖÃ£¿ÔÚvideo_register_device
+    		else if (vfd->ctrl_handler)  // åœ¨å“ªè®¾ç½®ï¼Ÿåœ¨video_register_device
     			ret = v4l2_queryctrl(vfd->ctrl_handler, p);
-    			            // ¸ù¾İIDÔÚctrl_handlerÀïÕÒµ½v4l2_ctrl£¬·µ»ØËüµÄÖµ
+    			            // æ ¹æ®IDåœ¨ctrl_handleré‡Œæ‰¾åˆ°v4l2_ctrlï¼Œè¿”å›å®ƒçš„å€¼
                                                 
 
-¶ş¡¢²âÊÔĞéÄâÇı¶¯vivi
-×¼±¸¹¤×÷£º°²×°xawtv
+äºŒã€æµ‹è¯•è™šæ‹Ÿé©±åŠ¨vivi
+å‡†å¤‡å·¥ä½œï¼šå®‰è£…xawtv
 sudo apt-get install xawtv
 
-Ô´Âëxawtv-3.95.tar.gz
+æºç xawtv-3.95.tar.gz
 http://www.kraxel.org/releases/xawtv/
 
-ÔÚÕâ¸öÍøÕ¾´´½¨ĞÂµÄsources.list
+åœ¨è¿™ä¸ªç½‘ç«™åˆ›å»ºæ–°çš„sources.list
 http://repogen.simplylinux.ch/
-1. Ñ¡Ôñ¹ú¼Ò
-2£®Ñ¡ÔñÏàÁÚµÄubuntu°æ±¾
-3. Ñ¡Ôñ"Ubuntu Branches"
-4. Éú³Ésources.list
-5. °ÑµÃµ½ÄÚÈİÌæ»»µ½/etc/apt/sources.list
+1. é€‰æ‹©å›½å®¶
+2ï¼é€‰æ‹©ç›¸é‚»çš„ubuntuç‰ˆæœ¬
+3. é€‰æ‹©"Ubuntu Branches"
+4. ç”Ÿæˆsources.list
+5. æŠŠå¾—åˆ°å†…å®¹æ›¿æ¢åˆ°/etc/apt/sources.list
 6. sudo apt-get update
    sudo apt-get install xawtv
 
-²âÊÔUSBÉãÏñÍ·£º
-1£®ÈÃVMWAER´¦ÓÚÇ°Ì¨£¬½ÓÉÏUSBÉãÏñÍ·£¬¿ÉÒÔ¿´µ½Éú³ÉÁË/dev/video0
-2£®Ö´ĞĞ xawtv ¼´¿É¿´µ½Í¼Ïñ
+æµ‹è¯•USBæ‘„åƒå¤´ï¼š
+1ï¼è®©VMWAERå¤„äºå‰å°ï¼Œæ¥ä¸ŠUSBæ‘„åƒå¤´ï¼Œå¯ä»¥çœ‹åˆ°ç”Ÿæˆäº†/dev/video0
+2ï¼æ‰§è¡Œ xawtv å³å¯çœ‹åˆ°å›¾åƒ
 
-²âÊÔĞéÄâÉãÏñÍ·vivi£º
-1. È·¶¨ubuntuµÄÄÚºË°æ±¾
+æµ‹è¯•è™šæ‹Ÿæ‘„åƒå¤´viviï¼š
+1. ç¡®å®šubuntuçš„å†…æ ¸ç‰ˆæœ¬
 uname -a
 Linux book-desktop 2.6.31-14-generic #48-Ubuntu SMP Fri Oct 16 14:04:26 UTC 2009 i686 GNU/Linux
-2. È¥www.kernel.orgÏÂÔØÍ¬°æ±¾µÄÄÚºË
-   ½âÑ¹ºó°Ñdrivers/media/videoÄ¿Â¼È¡³ö
-   ĞŞ¸ÄËüµÄMakefileÎª£º
+2. å»www.kernel.orgä¸‹è½½åŒç‰ˆæœ¬çš„å†…æ ¸
+   è§£å‹åæŠŠdrivers/media/videoç›®å½•å–å‡º
+   ä¿®æ”¹å®ƒçš„Makefileä¸ºï¼š
 
 KERN_DIR = /usr/src/linux-headers-2.6.31-14-generic
 
@@ -139,10 +139,10 @@ obj-m   += v4l2-common.o
 3. ioctl(4, VIDIOC_G_FMT
 4. for()
         ioctl(4, VIDIOC_ENUM_FMT
-5. ioctl(4, VIDIOC_QUERYCAP    // ÁĞ¾ÙĞÔÄÜ
-6. ioctl(4, VIDIOC_G_INPUT     // »ñµÃµ±Ç°Ê¹ÓÃÊäÈëÔ´
-7. ioctl(4, VIDIOC_ENUMINPUT   // ÁĞ¾ÙÊäÈëÔ´
-8. ioctl(4, VIDIOC_QUERYCTRL   // ²éÑ¯ÊôĞÔ,±ÈÈçÁÁ¶È¡¢¶Ô±È¶È
+5. ioctl(4, VIDIOC_QUERYCAP    // åˆ—ä¸¾æ€§èƒ½
+6. ioctl(4, VIDIOC_G_INPUT     // è·å¾—å½“å‰ä½¿ç”¨è¾“å…¥æº
+7. ioctl(4, VIDIOC_ENUMINPUT   // åˆ—ä¸¾è¾“å…¥æº
+8. ioctl(4, VIDIOC_QUERYCTRL   // æŸ¥è¯¢å±æ€§,æ¯”å¦‚äº®åº¦ã€å¯¹æ¯”åº¦
 9. ioctl(4, VIDIOC_QUERYCAP
 10. ioctl(4, VIDIOC_ENUMINPUT
 
@@ -158,54 +158,54 @@ obj-m   += v4l2-common.o
 
 
 
-Èı¡¢¸ù¾İĞéÄâÇı¶¯viviµÄÊ¹ÓÃ¹ı³Ì³¹µ×·ÖÎöÉãÏñÍ·Çı¶¯
-// 1~7¶¼ÊÇÔÚv4l2_openÀïµ÷ÓÃ
+ä¸‰ã€æ ¹æ®è™šæ‹Ÿé©±åŠ¨viviçš„ä½¿ç”¨è¿‡ç¨‹å½»åº•åˆ†ææ‘„åƒå¤´é©±åŠ¨
+// 1~7éƒ½æ˜¯åœ¨v4l2_opené‡Œè°ƒç”¨
 1. open
 2. ioctl(4, VIDIOC_QUERYCAP
 
 
 
-// 3~7 ¶¼ÊÇÔÚget_device_capabilitiesÀïµ÷ÓÃ
+// 3~7 éƒ½æ˜¯åœ¨get_device_capabilitiesé‡Œè°ƒç”¨
 3. for()
-        ioctl(4, VIDIOC_ENUMINPUT    // ÁĞ¾ÙÊäÈëÔ´,VIDIOC_ENUMINPUT/VIDIOC_G_INPUT/VIDIOC_S_INPUT²»ÊÇ±ØĞèµÄ
+        ioctl(4, VIDIOC_ENUMINPUT    // åˆ—ä¸¾è¾“å…¥æº,VIDIOC_ENUMINPUT/VIDIOC_G_INPUT/VIDIOC_S_INPUTä¸æ˜¯å¿…éœ€çš„
 4. for()
-        ioctl(4, VIDIOC_ENUMSTD      // ÁĞ¾Ù±ê×¼(ÖÆÊ½), ²»ÊÇ±ØĞèµÄ
+        ioctl(4, VIDIOC_ENUMSTD      // åˆ—ä¸¾æ ‡å‡†(åˆ¶å¼), ä¸æ˜¯å¿…éœ€çš„
 5. for()        
-        ioctl(4, VIDIOC_ENUM_FMT     // ÁĞ¾Ù¸ñÊ½
+        ioctl(4, VIDIOC_ENUM_FMT     // åˆ—ä¸¾æ ¼å¼
 
 6. ioctl(4, VIDIOC_G_PARM
 7. for()
-        ioctl(4, VIDIOC_QUERYCTRL    // ²éÑ¯ÊôĞÔ(±ÈÈçËµÁÁ¶ÈÖµ×îĞ¡Öµ¡¢×î´óÖµ¡¢Ä¬ÈÏÖµ)
+        ioctl(4, VIDIOC_QUERYCTRL    // æŸ¥è¯¢å±æ€§(æ¯”å¦‚è¯´äº®åº¦å€¼æœ€å°å€¼ã€æœ€å¤§å€¼ã€é»˜è®¤å€¼)
 
 
 
-// 8~10¶¼ÊÇÍ¨¹ıv4l2_read_attrÀ´µ÷ÓÃµÄ        
-8. ioctl(4, VIDIOC_G_STD             // »ñµÃµ±Ç°Ê¹ÓÃµÄ±ê×¼(ÖÆÊ½), ²»ÊÇ±ØĞèµÄ
+// 8~10éƒ½æ˜¯é€šè¿‡v4l2_read_attræ¥è°ƒç”¨çš„        
+8. ioctl(4, VIDIOC_G_STD             // è·å¾—å½“å‰ä½¿ç”¨çš„æ ‡å‡†(åˆ¶å¼), ä¸æ˜¯å¿…éœ€çš„
 9. ioctl(4, VIDIOC_G_INPUT 
-10. ioctl(4, VIDIOC_G_CTRL           // »ñµÃµ±Ç°ÊôĞÔ, ±ÈÈçÁÁ¶ÈÊÇ¶àÉÙ
+10. ioctl(4, VIDIOC_G_CTRL           // è·å¾—å½“å‰å±æ€§, æ¯”å¦‚äº®åº¦æ˜¯å¤šå°‘
 
 
 
-11. ioctl(4, VIDIOC_TRY_FMT          // ÊÔÊÔÄÜ·ñÖ§³ÖÄ³ÖÖ¸ñÊ½
-12. ioctl(4, VIDIOC_S_FMT            // ÉèÖÃÉãÏñÍ·Ê¹ÓÃÄ³ÖÖ¸ñÊ½
+11. ioctl(4, VIDIOC_TRY_FMT          // è¯•è¯•èƒ½å¦æ”¯æŒæŸç§æ ¼å¼
+12. ioctl(4, VIDIOC_S_FMT            // è®¾ç½®æ‘„åƒå¤´ä½¿ç”¨æŸç§æ ¼å¼
 
 
-// 13~16ÔÚv4l2_start_streaming
-13. ioctl(4, VIDIOC_REQBUFS          // ÇëÇóÏµÍ³·ÖÅä»º³åÇø
+// 13~16åœ¨v4l2_start_streaming
+13. ioctl(4, VIDIOC_REQBUFS          // è¯·æ±‚ç³»ç»Ÿåˆ†é…ç¼“å†²åŒº
 14. for()
-        ioctl(4, VIDIOC_QUERYBUF     // ²éÑ¯Ëù·ÖÅäµÄ»º³åÇø
+        ioctl(4, VIDIOC_QUERYBUF     // æŸ¥è¯¢æ‰€åˆ†é…çš„ç¼“å†²åŒº
         mmap        
 15. for ()
-        ioctl(4, VIDIOC_QBUF         // °ÑËùÓĞµÄ»º³åÇø¶¼·ÅÈë¶ÓÁĞ        
-16. ioctl(4, VIDIOC_STREAMON         // Æô¶¯ÉãÏñÍ·
+        ioctl(4, VIDIOC_QBUF         // æŠŠæ‰€æœ‰çš„ç¼“å†²åŒºéƒ½æ”¾å…¥é˜Ÿåˆ—        
+16. ioctl(4, VIDIOC_STREAMON         // å¯åŠ¨æ‘„åƒå¤´
 
 
 
-// 17Àï¶¼ÊÇÍ¨¹ıv4l2_write_attrÀ´µ÷ÓÃµÄ
+// 17é‡Œéƒ½æ˜¯é€šè¿‡v4l2_write_attræ¥è°ƒç”¨çš„
 17. for ()
-        ioctl(4, VIDIOC_S_CTRL           // ÉèÖÃÊôĞÔ
-    ioctl(4, VIDIOC_S_INPUT              // ÉèÖÃÊäÈëÔ´
-    ioctl(4, VIDIOC_S_STD                // ÉèÖÃ±ê×¼(ÖÆÊ½), ²»ÊÇ±ØĞèµÄ
+        ioctl(4, VIDIOC_S_CTRL           // è®¾ç½®å±æ€§
+    ioctl(4, VIDIOC_S_INPUT              // è®¾ç½®è¾“å…¥æº
+    ioctl(4, VIDIOC_S_STD                // è®¾ç½®æ ‡å‡†(åˆ¶å¼), ä¸æ˜¯å¿…éœ€çš„
 
 // v4l2_nextframe > v4l2_waiton    
 18. v4l2_queue_all
@@ -213,9 +213,9 @@ obj-m   += v4l2-common.o
         for ()
         {
             select(5, [4], NULL, NULL, {5, 0})      = 1 (in [4], left {4, 985979})
-            ioctl(4, VIDIOC_DQBUF                // de-queue, °Ñ»º³åÇø´Ó¶ÓÁĞÖĞÈ¡³ö
-            // ´¦Àí, Ö®Ç°ÒÑ¾­Í¨¹ımmap»ñµÃÁË»º³åÇøµÄµØÖ·, ¾Í¿ÉÒÔÖ±½Ó·ÃÎÊÊı¾İ        
-            ioctl(4, VIDIOC_QBUF                 // °Ñ»º³åÇø·ÅÈë¶ÓÁĞ
+            ioctl(4, VIDIOC_DQBUF                // de-queue, æŠŠç¼“å†²åŒºä»é˜Ÿåˆ—ä¸­å–å‡º
+            // å¤„ç†, ä¹‹å‰å·²ç»é€šè¿‡mmapè·å¾—äº†ç¼“å†²åŒºçš„åœ°å€, å°±å¯ä»¥ç›´æ¥è®¿é—®æ•°æ®        
+            ioctl(4, VIDIOC_QBUF                 // æŠŠç¼“å†²åŒºæ”¾å…¥é˜Ÿåˆ—
         }
 
 
@@ -225,7 +225,7 @@ obj-m   += v4l2-common.o
 
 
 
-xawtvµÄ¼¸´óº¯Êı£º
+xawtvçš„å‡ å¤§å‡½æ•°ï¼š
 1. v4l2_open
 2. v4l2_read_attr/v4l2_write_attr
 3. v4l2_start_streaming
@@ -234,24 +234,24 @@ xawtvµÄ¼¸´óº¯Êı£º
 
 
 
-//¾«¼ò
-ÉãÏñÍ·Çı¶¯³ÌĞò±ØĞèµÄ 11 ¸öioctl:
-    // ±íÊ¾ËüÊÇÒ»¸öÉãÏñÍ·Éè±¸
+//ç²¾ç®€
+æ‘„åƒå¤´é©±åŠ¨ç¨‹åºå¿…éœ€çš„ 11 ä¸ªioctl:
+    // è¡¨ç¤ºå®ƒæ˜¯ä¸€ä¸ªæ‘„åƒå¤´è®¾å¤‡
 	.vidioc_querycap      = vidioc_querycap,
 
-    /* ÓÃÓÚÁĞ¾Ù¡¢»ñµÃ¡¢²âÊÔ¡¢ÉèÖÃÉãÏñÍ·µÄÊı¾İµÄ¸ñÊ½ */
+    /* ç”¨äºåˆ—ä¸¾ã€è·å¾—ã€æµ‹è¯•ã€è®¾ç½®æ‘„åƒå¤´çš„æ•°æ®çš„æ ¼å¼ */
 	.vidioc_enum_fmt_vid_cap  = vidioc_enum_fmt_vid_cap,
 	.vidioc_g_fmt_vid_cap     = vidioc_g_fmt_vid_cap,
 	.vidioc_try_fmt_vid_cap   = vidioc_try_fmt_vid_cap,
 	.vidioc_s_fmt_vid_cap     = vidioc_s_fmt_vid_cap,
 
-    /* »º³åÇø²Ù×÷: ÉêÇë/²éÑ¯/·ÅÈë¶ÓÁĞ/È¡³ö¶ÓÁĞ */
+    /* ç¼“å†²åŒºæ“ä½œ: ç”³è¯·/æŸ¥è¯¢/æ”¾å…¥é˜Ÿåˆ—/å–å‡ºé˜Ÿåˆ— */
 	.vidioc_reqbufs       = vidioc_reqbufs,
 	.vidioc_querybuf      = vidioc_querybuf,
 	.vidioc_qbuf          = vidioc_qbuf,
 	.vidioc_dqbuf         = vidioc_dqbuf,
 
-	// Æô¶¯/Í£Ö¹
+	// å¯åŠ¨/åœæ­¢
 	.vidioc_streamon      = vidioc_streamon,
 	.vidioc_streamoff     = vidioc_streamoff,	
 
@@ -259,86 +259,86 @@ xawtvµÄ¼¸´óº¯Êı£º
 
 
 ////////////////////////////////////////////////////////////////////////////
-¼ÌĞø·ÖÎöÊı¾İµÄ»ñÈ¡¹ı³Ì£º
+ç»§ç»­åˆ†ææ•°æ®çš„è·å–è¿‡ç¨‹ï¼š
 ////////////////////////////////////////////////////////////////////////////
-1. ÇëÇó·ÖÅä»º³åÇø: ioctl(4, VIDIOC_REQBUFS          // ÇëÇóÏµÍ³·ÖÅä»º³åÇø
-                        videobuf_reqbufs(¶ÓÁĞ, v4l2_requestbuffers) // ¶ÓÁĞÔÚopenº¯ÊıÓÃvideobuf_queue_vmalloc_init³õÊ¼»¯
-                        // ×¢Òâ£ºÕâ¸öIOCTLÖ»ÊÇ·ÖÅä»º³åÇøµÄÍ·²¿ĞÅÏ¢£¬ÕæÕıµÄ»º´æ»¹Ã»ÓĞ·ÖÅäÄØ£¡
+1. è¯·æ±‚åˆ†é…ç¼“å†²åŒº: ioctl(4, VIDIOC_REQBUFS          // è¯·æ±‚ç³»ç»Ÿåˆ†é…ç¼“å†²åŒº
+                        videobuf_reqbufs(é˜Ÿåˆ—, v4l2_requestbuffers) // é˜Ÿåˆ—åœ¨openå‡½æ•°ç”¨videobuf_queue_vmalloc_initåˆå§‹åŒ–
+                        // æ³¨æ„ï¼šè¿™ä¸ªIOCTLåªæ˜¯åˆ†é…ç¼“å†²åŒºçš„å¤´éƒ¨ä¿¡æ¯ï¼ŒçœŸæ­£çš„ç¼“å­˜è¿˜æ²¡æœ‰åˆ†é…å‘¢ï¼
 
-2. ²éÑ¯Ó³Éä»º³åÇø:
-	ioctl(4, VIDIOC_QUERYBUF         // ²éÑ¯Ëù·ÖÅäµÄ»º³åÇø
-		videobuf_querybuf        // »ñµÃ»º³åÇøµÄÊı¾İ¸ñÊ½¡¢´óĞ¡¡¢Ã¿Ò»ĞĞ³¤¶È¡¢¸ß¶È
+2. æŸ¥è¯¢æ˜ å°„ç¼“å†²åŒº:
+	ioctl(4, VIDIOC_QUERYBUF         // æŸ¥è¯¢æ‰€åˆ†é…çš„ç¼“å†²åŒº
+		videobuf_querybuf        // è·å¾—ç¼“å†²åŒºçš„æ•°æ®æ ¼å¼ã€å¤§å°ã€æ¯ä¸€è¡Œé•¿åº¦ã€é«˜åº¦
 
-	mmap(²ÎÊıÀïÓĞ"´óĞ¡")   // ÔÚÕâÀï²Å·ÖÅä»º´æ£¡
+	mmap(å‚æ•°é‡Œæœ‰"å¤§å°")   // åœ¨è¿™é‡Œæ‰åˆ†é…ç¼“å­˜ï¼
 		v4l2_mmap
 		    vivi_mmap
 		        videobuf_mmap_mapper
-		            videobuf-vmalloc.cÀïµÄ__videobuf_mmap_mapper
-		                    mem->vmalloc = vmalloc_user(pages);   // ÔÚÕâÀï²Å¸ø»º³åÇø·ÖÅä¿Õ¼ä£¡£¡£¡
+		            videobuf-vmalloc.cé‡Œçš„__videobuf_mmap_mapper
+		                    mem->vmalloc = vmalloc_user(pages);   // åœ¨è¿™é‡Œæ‰ç»™ç¼“å†²åŒºåˆ†é…ç©ºé—´ï¼ï¼ï¼
 
-3. °Ñ»º³åÇø·ÅÈë¶ÓÁĞ:
-	ioctl(4, VIDIOC_QBUF             // °Ñ»º³åÇø·ÅÈë¶ÓÁĞ        
+3. æŠŠç¼“å†²åŒºæ”¾å…¥é˜Ÿåˆ—:
+	ioctl(4, VIDIOC_QBUF             // æŠŠç¼“å†²åŒºæ”¾å…¥é˜Ÿåˆ—        
 	    videobuf_qbuf
-		q->ops->buf_prepare(q, buf, field);  // µ÷ÓÃÇı¶¯³ÌĞòÌá¹©µÄº¯Êı×öĞ©Ô¤´¦Àí
-		list_add_tail(&buf->stream, &q->stream);  // °Ñ»º³åÇø·ÅÈë¶ÓÁĞµÄÎ²²¿
-		q->ops->buf_queue(q, buf);           // µ÷ÓÃÇı¶¯³ÌĞòÌá¹©µÄ"Èë¶ÓÁĞº¯Êı"
+		q->ops->buf_prepare(q, buf, field);  // è°ƒç”¨é©±åŠ¨ç¨‹åºæä¾›çš„å‡½æ•°åšäº›é¢„å¤„ç†
+		list_add_tail(&buf->stream, &q->stream);  // æŠŠç¼“å†²åŒºæ”¾å…¥é˜Ÿåˆ—çš„å°¾éƒ¨
+		q->ops->buf_queue(q, buf);           // è°ƒç”¨é©±åŠ¨ç¨‹åºæä¾›çš„"å…¥é˜Ÿåˆ—å‡½æ•°"
         
 
-4. Æô¶¯ÉãÏñÍ·
+4. å¯åŠ¨æ‘„åƒå¤´
 ioctl(4, VIDIOC_STREAMON
     videobuf_streamon
         q->streaming = 1;
         
 
-5. ÓÃselect²éÑ¯ÊÇ·ñÓĞÊı¾İ
-          // Çı¶¯³ÌĞòÀï±Ø¶¨ÓĞ: ²úÉúÊı¾İ¡¢»½ĞÑ½ø³Ì µÄ´úÂë£¡
+5. ç”¨selectæŸ¥è¯¢æ˜¯å¦æœ‰æ•°æ®
+          // é©±åŠ¨ç¨‹åºé‡Œå¿…å®šæœ‰: äº§ç”Ÿæ•°æ®ã€å”¤é†’è¿›ç¨‹ çš„ä»£ç ï¼
           v4l2_poll
                 vdev->fops->poll
                     vivi_poll   
                         videobuf_poll_stream
-                            // ´Ó¶ÓÁĞµÄÍ·²¿»ñµÃ»º³åÇø£¡
+                            // ä»é˜Ÿåˆ—çš„å¤´éƒ¨è·å¾—ç¼“å†²åŒºï¼
                 			buf = list_entry(q->stream.next, struct videobuf_buffer, stream);
-                            // Èç¹ûÃ»ÓĞÊı¾İÔòĞİÃß£¡
+                            // å¦‚æœæ²¡æœ‰æ•°æ®åˆ™ä¼‘çœ ï¼
                 			poll_wait(file, &buf->done, wait);
 
-    Ë­À´²úÉúÊı¾İ¡¢Ë­À´»½ĞÑËü£¿
-    ÄÚºËÏß³Ì vivi_thread Ã¿30MSÖ´ĞĞÒ»´Î£¬Ëüµ÷ÓÃ£º
+    è°æ¥äº§ç”Ÿæ•°æ®ã€è°æ¥å”¤é†’å®ƒï¼Ÿ
+    å†…æ ¸çº¿ç¨‹ vivi_thread æ¯30MSæ‰§è¡Œä¸€æ¬¡ï¼Œå®ƒè°ƒç”¨ï¼š
 	    vivi_thread_tick
-		vivi_fillbuff(fh, buf);  // ¹¹ÔìÊı¾İ! ÕæÊµµÄÉãÏñÍ·µÄ»°£¬ÓÃÓ²¼ş²úÉúÊı¾İ¡£ÕâÀïÖ»ÊÇĞéÄâµÄÉè±¸£¬ËùÒÔÓÃÄÚºËÏß³Ì²úÉúÊı¾İ¡£
-		wake_up(&buf->vb.done);  // »½ĞÑ½ø³Ì!
+		vivi_fillbuff(fh, buf);  // æ„é€ æ•°æ®! çœŸå®çš„æ‘„åƒå¤´çš„è¯ï¼Œç”¨ç¡¬ä»¶äº§ç”Ÿæ•°æ®ã€‚è¿™é‡Œåªæ˜¯è™šæ‹Ÿçš„è®¾å¤‡ï¼Œæ‰€ä»¥ç”¨å†…æ ¸çº¿ç¨‹äº§ç”Ÿæ•°æ®ã€‚
+		wake_up(&buf->vb.done);  // å”¤é†’è¿›ç¨‹!
           
 
 
-6. ÓĞÊı¾İºó´Ó¶ÓÁĞÀïÈ¡³ö»º³åÇø
-// ÓĞÄÇÃ´¶à»º³åÇø£¬APPÈçºÎÖªµÀÄÄÒ»¸ö»º³åÇøÓĞÊı¾İ£¿µ÷ÓÃVIDIOC_DQBUF
+6. æœ‰æ•°æ®åä»é˜Ÿåˆ—é‡Œå–å‡ºç¼“å†²åŒº
+// æœ‰é‚£ä¹ˆå¤šç¼“å†²åŒºï¼ŒAPPå¦‚ä½•çŸ¥é“å“ªä¸€ä¸ªç¼“å†²åŒºæœ‰æ•°æ®ï¼Ÿè°ƒç”¨VIDIOC_DQBUF
 ioctl(4, VIDIOC_DQBUF 
     vidioc_dqbuf   
-        // ÔÚ¶ÓÁĞÀï»ñµÃÓĞÊı¾İµÄ»º³åÇø
+        // åœ¨é˜Ÿåˆ—é‡Œè·å¾—æœ‰æ•°æ®çš„ç¼“å†²åŒº
         retval = stream_next_buffer(q, &buf, nonblocking);
         
-        // °ÑËü´Ó¶ÓÁĞÖĞÉ¾µô
+        // æŠŠå®ƒä»é˜Ÿåˆ—ä¸­åˆ æ‰
         list_del(&buf->stream);
         
-        // °ÑÕâ¸ö»º³åÇøµÄ×´Ì¬·µ»Ø¸øAPP
+        // æŠŠè¿™ä¸ªç¼“å†²åŒºçš„çŠ¶æ€è¿”å›ç»™APP
         videobuf_status(q, b, buf, q->type);
 
 
-7. Ó¦ÓÃ³ÌĞò¸ù¾İVIDIOC_DQBUFËùµÃµ½»º³åÇø×´Ì¬£¬ÖªµÀÊÇÄÄÒ»¸ö»º³åÇøÓĞÊı¾İ£¬¾ÍÈ¥¶Á¶ÔÓ¦µÄµØÖ·(¸ÃµØÖ·À´×ÔÇ°ÃæµÄmmap)
+7. åº”ç”¨ç¨‹åºæ ¹æ®VIDIOC_DQBUFæ‰€å¾—åˆ°ç¼“å†²åŒºçŠ¶æ€ï¼ŒçŸ¥é“æ˜¯å“ªä¸€ä¸ªç¼“å†²åŒºæœ‰æ•°æ®ï¼Œå°±å»è¯»å¯¹åº”çš„åœ°å€(è¯¥åœ°å€æ¥è‡ªå‰é¢çš„mmap)
 
 
 
 
 
 
-ÔõÃ´Ğ´ÉãÏñÍ·Çı¶¯³ÌĞò:
-1. ·ÖÅävideo_device:video_device_alloc
-2. ÉèÖÃ
+æ€ä¹ˆå†™æ‘„åƒå¤´é©±åŠ¨ç¨‹åº:
+1. åˆ†é…video_device:video_device_alloc
+2. è®¾ç½®
    .fops
-   .ioctl_ops (ÀïÃæĞèÒªÉèÖÃ11Ïî)
-   Èç¹ûÒªÓÃÄÚºËÌá¹©µÄ»º³åÇø²Ù×÷º¯Êı£¬»¹ĞèÒª¹¹ÔìÒ»¸ö videobuf_queue_ops
-3. ×¢²á: video_register_device
+   .ioctl_ops (é‡Œé¢éœ€è¦è®¾ç½®11é¡¹)
+   å¦‚æœè¦ç”¨å†…æ ¸æä¾›çš„ç¼“å†²åŒºæ“ä½œå‡½æ•°ï¼Œè¿˜éœ€è¦æ„é€ ä¸€ä¸ª videobuf_queue_ops
+3. æ³¨å†Œ: video_register_device
 
-ËÄ¡¢×Ô¼ºĞ´Ò»¸öĞéÄâÉãÏñÍ·Çı¶¯
+å››ã€è‡ªå·±å†™ä¸€ä¸ªè™šæ‹Ÿæ‘„åƒå¤´é©±åŠ¨
 
 
 
@@ -358,38 +358,38 @@ LD_PRELOAD=/usr/lib/libv4l/v4l1compat.so camorama
 
 sudo apt-get install cheese
 
-¶àÖÖLINUXÏÂµÄÉãÏñÍ·¹¤¾ß
+å¤šç§LINUXä¸‹çš„æ‘„åƒå¤´å·¥å…·
 https://help.ubuntu.com/community/Webcam
 
 http://blog.csdn.net/hongtao_liu/article/details/5867351
 http://blog.csdn.net/hongtao_liu/article/details/5894089
-»ùÓÚV4L2µÄÊÓÆµÇı¶¯¿ª·¢
+åŸºäºV4L2çš„è§†é¢‘é©±åŠ¨å¼€å‘
 
-¸ÅÄî£º
-ÊÓÆµÖÆÊ½ : NTSC PAL V4L2_STD_NTSC V4L2_STD_PAL
-ÊÓÆµ¸ñÊ½ £ºRGB YCbCr 420,422 V4L2_PIX_FMT_UYVY
+æ¦‚å¿µï¼š
+è§†é¢‘åˆ¶å¼ : NTSC PAL V4L2_STD_NTSC V4L2_STD_PAL
+è§†é¢‘æ ¼å¼ ï¼šRGB YCbCr 420,422 V4L2_PIX_FMT_UYVY
 
 
 
  
-[ÊÓÆµ¼¼ÊõÊÖ²á]ÖĞÎÄµÚ5°æ
+[è§†é¢‘æŠ€æœ¯æ‰‹å†Œ]ä¸­æ–‡ç¬¬5ç‰ˆ
 http://ishare.iask.sina.com.cn/f/21425721.html
 http://ishare.iask.sina.com.cn/f/21425722.html
 
 
 http://www.360doc.com/content/08/0926/11/14148_1678949.shtml
 
-Êı×ÖÊÓÆµµÄ»ù±¾¸ÅÄî
+æ•°å­—è§†é¢‘çš„åŸºæœ¬æ¦‚å¿µ
 http://hi.baidu.com/fengbit/item/78a161375067f1c42f8ec24e
 
-USBĞ­Òé
+USBåè®®
 http://www.usb.org/developers/devclass_docs
 
-USB Video Class Specification ±Ê¼Ç 
+USB Video Class Specification ç¬”è®° 
 http://blog.csdn.net/chinaunixj/article/details/7394315
 
 
-»ùÓÚÇ¶ÈëÊ½LinuxµÄÊÓÆµ²É¼¯ÏµÍ³---UVCÇı¶¯Ä£ĞÍ½éÉÜ
+åŸºäºåµŒå…¥å¼Linuxçš„è§†é¢‘é‡‡é›†ç³»ç»Ÿ---UVCé©±åŠ¨æ¨¡å‹ä»‹ç»
 http://blog.csdn.net/chinaunixj/article/details/7439870
 
 
@@ -411,7 +411,7 @@ struct UVC_HEADER_DESCRIPTOR(n) {			\
 Input Terminal Descriptor (Camera)
 
 
-Çı¶¯¿ò¼Ü·ÖÎö£º
+é©±åŠ¨æ¡†æ¶åˆ†æï¼š
 Structure of a driver
 ---------------------
 
@@ -456,7 +456,7 @@ No package 'fontsproto' found
 
 error: asm/page.h: No such file or directory
 
-°Ñasm/page.h¸ÄÎªsys/user.h
+æŠŠasm/page.hæ”¹ä¸ºsys/user.h
 
 sudo apt-get install libxaw7-dev
 
