@@ -73,8 +73,7 @@ static void __init do_initcalls(void)
 }
 //subsys_initcall(net_dev_init)会的注册net_dev_init，所以其中的一个level会的执行net_dev_init。
 
-可以看到，start_kernel会调用net_dev_init，BH就是在这里绑定BH的处理handler的(至少网络部分是在这里)。来看下softqir的BH种类：
-
+可以看到，start_kernel会调用net_dev_init，BH就是在这里绑定BH的处理handler的(至少网络部分是在这里)。来看下softirq的BH种类：
 enum {
   HI_SOFTIRQ=0,
   TIMER_SOFTIRQ,
@@ -83,8 +82,8 @@ enum {
   SCSI_SOFTIRQ,
   TASKLET_SOFTIRQ
 };
-这些类型通过open_softirq和对应的handler关联：
-static struct softirq_action softirq_vec[32] __cacheline_aligned_in_smp;
+这些类型通过open_softirq和对应的handler关联：   static struct softirq_action softirq_vec[32] __cacheline_aligned_in_smp;
+
 void open_softirq(int nr, void (*action)(struct softirq_action*), void *data)
 {
     softirq_vec[nr].data = data;
