@@ -1,18 +1,27 @@
+/////////////////////////////////////////////////
 softirq 与 ksoftirqd 内核线程
-
+/////////////////////////////////////////////////
 本文是对《Understanding Linux Network Internals》笔记。
 
-中断，简单的说就是外部设备通知kernel的一种方式。在之前的文章里也介绍了，可以通过request irq的方法注册一个中断号以及对应的irq。当一个数据包到达网卡的时候，网卡就会触发对应的中断号，然后内核根据这个中断号找到对应的handle，由handler对这个数据包进行处理。
-注意，当中断的handler在进行处理的时候，中断是被关闭的。也就是说在handler执行期间，新的中断是不会被接收的。因此中断的handler只适合做一些非常快速的活，否则会阻塞其它中断的进行。那么对于网络协议来说要对其进行二层、三层等处理是很复杂很耗时的，但有时候数据包又会很多，咋办呢？于是内核里有下半区中断的说法。其实很简单，在handler里我只做最简单的操作，并在内存里保存足够的信息，然后设置一个flag说：“hi 内核，有空的时候来处理下我这边的事情哈”，然后handler就结束了。之后当内核空闲的时候，其会去检查有没有flag被标记为有事情要做，如果有的话内核就会去进行处理。
+中断，简单的说就是外部设备通知kernel的一种方式。在之前的文章里也介绍了，可以通过request irq的方法注册一个中断号以及对应的irq。
+当一个数据包到达网卡的时候，网卡就会触发对应的中断号，然后内核根据这个中断号找到对应的handle，由handler对这个数据包进行处理。
+注意，当中断的handler在进行处理的时候，中断是被关闭的。也就是说在handler执行期间，新的中断是不会被接收的。
+因此中断的handler只适合做一些非常快速的活，否则会阻塞其它中断的进行。那么对于网络协议来说要对其进行二层、三层等处理是很复杂很耗时的，
+但有时候数据包又会很多，咋办呢？于是内核里有下半区中断的说法。其实很简单，在handler里我只做最简单的操作，并在内存里保存足够的信息，
+然后设置一个flag说：“hi 内核，有空的时候来处理下我这边的事情哈”，然后handler就结束了。之后当内核空闲的时候，其会去检查有没有flag被标记为有事情要做，
+如果有的话内核就会去进行处理。
 
+/////////////////////////////////////////////////
 目前主要有三种下半区的方法：
+/////////////////////////////////////////////////
 1.old-style bottom half：即便是多核处理器，同一时间只能运行一种下半区任务
-
 2.tasklet：对于多核处理器，同一时间多个核可以同时运行不同种类的下半区任务，但是对于同一种类的下半区任务不能同时运行
-
 3.softirq：对于多核处理器，同一时间多个和可以同时运行多个下半区任务，并且任务的种类可以相同。不过同一时间相同的核上不能运行相同的任务
 
-下面主要介绍softirq。
+
+
+
+下面主要介绍第三种： softirq
 
 来看下handler和下半区（下面会简称BH）的联系。在内核boot up的时候，start_kernel是被调用的入口：
 asmlinkage __visible void __init start_kernel(void)
@@ -64,7 +73,7 @@ static void __init do_initcalls(void)
 }
 //subsys_initcall(net_dev_init)会的注册net_dev_init，所以其中的一个level会的执行net_dev_init。
 
-可以看到，start_kernel会调用net_dev_init，我们的BH就是在这里绑定BH的处理handler的(至少网络部分是在这里)。来看下softqir的BH种类吧：
+可以看到，start_kernel会调用net_dev_init，BH就是在这里绑定BH的处理handler的(至少网络部分是在这里)。来看下softqir的BH种类：
 
 enum {
   HI_SOFTIRQ=0,
@@ -75,22 +84,25 @@ enum {
   TASKLET_SOFTIRQ
 };
 这些类型通过open_softirq和对应的handler关联：
-
 static struct softirq_action softirq_vec[32] __cacheline_aligned_in_smp;
-
 void open_softirq(int nr, void (*action)(struct softirq_action*), void *data)
 {
     softirq_vec[nr].data = data;
     softirq_vec[nr].action = action;
 }
-可以看到关联关系是放在softirq_vec这个数组里的。那么我们的softirq在哪些时候会的被调用呢？有下面几种情况：
+
+可以看到关联关系是放在softirq_vec这个数组里的。那么softirq在哪些时候会的被调用呢？ 有下面几种情况：
 
 1.do_IRQ的结尾
 2.系统调用的返回
 3.local_bh_enable调用后
 4.ksoftirqd这个内核线程
 
-当softirq可以被调用的时候，入口为do_softirq。首先再来说下此时的背景：一个数据包到达网卡，网卡根据中断号调用中断的handler，中断的handler做了必要的处理，比如从网卡取出数据放到skb_buf中、设置有BH要处理的flag等。之后中断结束（do_IRQ）的时候，允许软中断的执行，此时do_softirq就上场了。
+当softirq可以被调用的时候，入口为do_softirq。
+
+首先再来说下此时的背景：
+一个数据包到达网卡，网卡根据中断号调用中断的handler，中断的handler做了必要的处理，比如从网卡取出数据放到skb_buf中、设置有BH要处理的flag等。
+之后中断结束（do_IRQ）的时候，允许软中断的执行，此时do_softirq就上场了。
 
 来看代码：
 asmlinkage __visible void do_softirq(void)
@@ -108,6 +120,7 @@ asmlinkage __visible void do_softirq(void)
 首先如果在中断里就退出了（无论是硬中断还是软中断）。然后会保存下中断flag，之后看下local_softirq_pending：
 
 #define local_softirq_pending() this_cpu_read(irq_stat.__softirq_pending)
+
 在这之后的do_softirq_own_stack会调用__do_softirq。来看下__do_softirq:
 
 asmlinkage __visible void __do_softirq(void)
@@ -158,7 +171,8 @@ while ((softirq_bit = ffs(pending))) {
   pending >>= softirq_bit;
 }
 
-然后通过set_softirq_pending，当前CPU的softirq的pending状态被清零了。环境话说现有的pending的请求都要被这个__do_softirq处理。之后的while循环就是一次处理pending中的每类softirq。通过h->action(h)调用对应的方法。
+然后通过set_softirq_pending，当前CPU的softirq的pending状态被清零了。
+话说现有的pending的请求都要被这个__do_softirq处理。之后的while循环就是一次处理pending中的每类softirq。通过h->action(h)调用对应的方法。
 
 rcu_bh_qs();
     local_irq_disable();
@@ -172,7 +186,8 @@ rcu_bh_qs();
         wakeup_softirqd();
     }
 
-由于我们已经开中断了，所以可能有新的softirq pending上来，__do_softirq目前还没有打开BH，所以其会在max_restart内都去循环执行上面的处理。但是如果次数达到了max_restart，那么会通过ksoftirqd的内核线程继续处理。
+由于我们已经开中断了，所以可能有新的softirq pending上来，__do_softirq目前还没有打开BH，所以其会在max_restart内都去循环执行上面的处理。
+但是如果次数达到了max_restart，那么会通过ksoftirqd的内核线程继续处理。
 
 lockdep_softirq_end(in_hardirq);
     account_irq_exit_time(current);
@@ -183,10 +198,30 @@ lockdep_softirq_end(in_hardirq);
 
 最后BH重新enable。
 
+/////////////////////////////////////////////////
+为什么要有ksoftirqd呢？？ 为什么不都在 __do_softirq 里都处理了呢？
+/////////////////////////////////////////////////
+原因很简单：
+我们要给用户态CPU时间。
+如果都在内核态__do_softirq里，并且只有硬件中断可以抢占它，那么当数据包很多的时候__do_softirq就不能返回了，于是用户态的进程就没有机会使用CPU了。
 
-为什么要有ksoftirqd呢？为什么不能在__do_softirq里都处理了呢？
-原因很简单：我们要给用户态CPU时间。如果都在内核态__do_softirq里，并且只有硬件中断可以抢占它，那么当数据包很多的时候__do_softirq就不能返回了，于是用户态的进程就没有机会使用CPU了。那为什么不都交给内核线程呢？原因应该是在包很少的时候，通过直接的去处理可以加速处理速度吧。只有包很多造成大量软中断产生的时候才需要内核线程来帮忙。换句话说当ksoftirqd的CPU使用率很高的时候，可能就是软中断产生过多了。此时怎么调优呢？比如可以看下网卡支不支持多队列，支持的话绑定不同的核让软中断分散开来。
+/////////////////////////////////////////////////
+那为什么不都交给内核线程呢？
+/////////////////////////////////////////////////
+原因应该是在包很少的时候，通过直接的去处理可以加速处理速度吧。只有包很多造成大量软中断产生的时候才需要内核线程来帮忙。
+
+
+
+换句话说当ksoftirqd的CPU使用率很高的时候，可能就是软中断产生过多了。
+
+此时怎么调优呢？比如可以看下网卡支不支持多队列，支持的话绑定不同的核让软中断分散开来。
+
+
+
+
+///////////////////////////
 来看下ksoftirqd这个内核线程:
+///////////////////////////
 static void run_ksoftirqd(unsigned int cpu)
 {   
     local_irq_disable();
@@ -202,4 +237,5 @@ static void run_ksoftirqd(unsigned int cpu)
     }
     local_irq_enable();
 }
-嘿嘿，其也就是调用了下__do_softirq()，只不过实在内核线程中执行罢了。注意，__do_softirq可是会disable BH的，所以如果软中断很高的话，BH就都会由这个内核线程处理而不是由其它地方（如上面中断后调用的do_softirq）进行处理。
+其也就是调用了下__do_softirq()，只不过是在内核线程中执行罢了。
+注意，__do_softirq可是会disable BH的，所以如果软中断很高的话，BH就都会由这个内核线程处理而不是由其它地方（如上面中断后调用的do_softirq）进行处理。
