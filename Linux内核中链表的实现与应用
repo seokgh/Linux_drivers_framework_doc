@@ -1,6 +1,6 @@
-Linux内核中链表的实现与应用
-
 /////////////////////////////////////////////
+//Linux内核中链表的实现与应用
+//
 //参考资料：Linux操作系统原理与应用（第2版）    陈莉君、康华 编著
 /////////////////////////////////////////////
 
@@ -76,9 +76,6 @@ mylist_head的next、prev指针都初始化为指向自己。这样，就有了�
 #include <linux/slab.h>
 #include <linux/list.h>
 
-MODULE_LICENCE("GPL");
-MODULE_AUTHOR("LUOTAIJIA");
-
 #define N 10
 struct numlist {
     int num;
@@ -145,6 +142,8 @@ static void __exit doublelist_exit(void)
 
 module_init(doublelist_init);
 module_exit(doublelist_exit);
+MODULE_LICENCE("GPL");
+MODULE_AUTHOR("shigh1005@gmail.com");
 
 
 
