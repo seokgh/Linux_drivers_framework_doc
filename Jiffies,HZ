@@ -2,8 +2,191 @@
 HZ：定义每一秒发生多少次timer interrupt
 Jiffies： 每发生一次timer interrupt， Jiffies++
 
-///////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+linux中的jiffies变量
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+   全局变量jiffies用来记录自系统启动以来产生的节拍的总数。启动时，内核将该变量初始化为0，此后，每次时钟中断处理程序都会增加该变量的值。一秒内时钟中断的次数等于Hz，所以jiffies一秒内增加的值也就是Hz。
+
+   系统运行时间以秒为单位，等于jiffies/Hz。
+
+注意，jiffies类型为无符号长整型(unsigned long)，其他任何类型存放它都不正确。
+
+将以秒为单位的时间转化为jiffies：
+
+seconds * Hz
+
+将jiffies转化为以秒为单位的时间：
+
+jiffies / Hz
+
+相比之下，内核中将秒转换为jiffies用的多些。
+
+jiffies的内部表示
+   jiffies定义于文件<linux\Jiffies.h>中：
+
+/*
+* The 64-bit value is not atomic - you MUST NOT read it
+* without sampling the sequence number in xtime_lock.
+* get_jiffies_64() will do this for you as appropriate.
+*/
+extern u64 __jiffy_data jiffies_64;
+extern unsigned long volatile __jiffy_data jiffies;
+ld(1)脚本用于连接主内核映像（在x86上位于arch/i386/kernel/vmlinux.lds.S中），然后用jiffies_64变量的初值覆盖jiffies变量。因此jiffies取整个jiffies_64变量的低32位。
+
+  访问jiffies的代码只会读取jiffies_64的低32位，通过get_jiffies_64()函数就可以读取整个64位的值。在64位体系结构上，jiffies_64和jiffies指的是同一个变量。
+
+#if (BITS_PER_LONG < 64)
+u64 get_jiffies_64(void);
+#else
+static inline u64 get_jiffies_64(void)
+{
+return (u64)jiffies;
+}
+#endif
+在<Time.c(kernel)>中
+#if (BITS_PER_LONG < 64)
+u64 get_jiffies_64(void)
+{
+    unsigned long seq;
+    u64 ret;
+do {
+        seq = read_seqbegin(&xtime_lock);
+        ret = jiffies_64;
+    } while (read_seqretry(&xtime_lock, seq));
+return ret;
+}
+jiffies的回绕wrap around
+  当jiffies的值超过它的最大存放范围后就会发生溢出。对于32位无符号长整型，最大取值为(2^32)-1,即429496795。如果节拍计数达到了最大值后还要继续增加，它的值就会回绕到0。
+
+  内核提供了四个宏来帮助比较节拍计数，它们能正确的处理节拍计数回绕的问题：
+
+/*
+*  These inlines deal with timer wrapping correctly. You are
+*  strongly encouraged to use them
+*  1. Because people otherwise forget
+*  2. Because if the timer wrap changes in future you won't have to
+*     alter your driver code.
+*
+* time_after(a,b) returns true if the time a is after time b.
+*
+* Do this with "<0" and ">=0" to only test the sign of the result. A
+* good compiler would generate better code (and a really good compiler
+* wouldn't care). Gcc is currently neither.
+*/
+#define time_after(a,b)     \
+    (typecheck(unsigned long, a) && \
+     typecheck(unsigned long, b) && \
+     ((long)(b) - (long)(a) < 0))
+#define time_before(a,b)    time_after(b,a)
+#define time_after_eq(a,b)  \
+    (typecheck(unsigned long, a) && \
+     typecheck(unsigned long, b) && \
+     ((long)(a) - (long)(b) >= 0))
+#define time_before_eq(a,b) time_after_eq(b,a)
+/* Same as above, but does so with platform independent 64bit types.
+* These must be used when utilizing jiffies_64 (i.e. return value of
+* get_jiffies_64() */
+#define time_after64(a,b)   \
+    (typecheck(__u64, a) && \
+     typecheck(__u64, b) && \
+     ((__s64)(b) - (__s64)(a) < 0))
+#define time_before64(a,b)  time_after64(b,a)
+#define time_after_eq64(a,b)    \
+    (typecheck(__u64, a) && \
+     typecheck(__u64, b) && \
+     ((__s64)(a) - (__s64)(b) >= 0))
+#define time_before_eq64(a,b)   time_after_eq64(b,a)
+用户空间和HZ
+  问题提出：
+
+  在2.6以前的内核中，如果改变内核中的HZ值会给用户空间中某些程序造成异常结果。因为内核是以节拍数/秒的形式给用户空间导出这个值的，应用程序便依赖这个特定的HZ值。如果在内核中改变了HZ的定义值，就打破了用户空间的常量关系---用户空间并不知道新的HZ值。
+
+  解决方法：
+
+  内核更改所有导出的jiffies值。内核定义了USER_HZ来代表用户空间看到的HZ值。在x86体系结构上，由于HZ值原来一直是100，所以USER_HZ值就定义为100。内核可以使用宏jiffies_to_clock_t()将一个有HZ表示的节拍计数转换为一个由USER_HZ表示的节拍计数。
+
+在<Time.c(kernel)>中
+/*
+* Convert jiffies/jiffies_64 to clock_t and back.
+*/
+clock_t jiffies_to_clock_t(long x)
+{
+#if (TICK_NSEC % (NSEC_PER_SEC / USER_HZ)) == 0
+return x / (HZ / USER_HZ);
+#else
+    u64 tmp = (u64)x * TICK_NSEC;
+    do_div(tmp, (NSEC_PER_SEC / USER_HZ));
+return (long)tmp;
+#endif
+}
+unsigned long clock_t_to_jiffies(unsigned long x)
+{
+#if (HZ % USER_HZ)==0
+if (x >= ~0UL / (HZ / USER_HZ))
+return ~0UL;
+return x * (HZ / USER_HZ);
+#else
+    u64 jif;
+/* Don't worry about loss of precision here .. */
+if (x >= ~0UL / HZ * USER_HZ)
+return ~0UL;
+/* .. but do try to contain it here */
+    jif = x * (u64) HZ;
+    do_div(jif, USER_HZ);
+return jif;
+#endif
+}
+u64 jiffies_64_to_clock_t(u64 x)
+{
+#if (TICK_NSEC % (NSEC_PER_SEC / USER_HZ)) == 0
+    do_div(x, HZ / USER_HZ);
+#else
+/*
+     * There are better ways that don't overflow early,
+     * but even this doesn't overflow in hundreds of years
+     * in 64 bits, so..
+     */
+    x *= TICK_NSEC;
+    do_div(x, (NSEC_PER_SEC / USER_HZ));
+#endif
+return x;
+}
+在<Div64.h(include\asm-i385)>中
+/*
+* do_div() is NOT a C function. It wants to return
+* two values (the quotient and the remainder), but
+* since that doesn't work very well in C, what it
+* does is:
+*
+* - modifies the 64-bit dividend _in_place_
+* - returns the 32-bit remainder
+*
+* This ends up being the most efficient "calling
+* convention" on x86.
+*/
+#define do_div(n,base) ({ \
+    unsigned long __upper, __low, __high, __mod, __base; \
+    __base = (base); \
+    asm("":"=a" (__low), "=d" (__high):"A" (n)); \
+    __upper = __high; \
+if (__high) { \
+        __upper = __high % (__base); \
+        __high = __high / (__base); \
+    } \
+    asm("divl %2":"=a" (__low), "=d" (__mod):"rm" (__base), "0" (__low), "1" (__upper)); \
+    asm("":"=A" (n):"a" (__low),"d" (__high)); \
+    __mod; \
+})
+  用户空间期望HZ=USER_HZ，但是如果它们不相等，则由宏完成转换。
+  
+  
+  
+  
+  
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 jiffies
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
     如果需要特别精确的时间，就需要使用平台相关的资源，现代cpu基本上都包含一个随时钟周期而不断增长的计数寄存器，这个时钟计数寄存器是完成高分辨率计时任务的唯一可靠途径。
 
 　　基于不同的平台，这个寄存器可能是可读的，有可能是不可读的；可能32位，也可能64位；可能是可写的也可能不可写；如果是32位，那还得考虑溢出问题。在某一些平台上，该寄存器甚至根本不可能存在，或者如果如果cpu缺少这个特性，而我们又需要处理这种特殊的需求的时候，则可能会由硬件设计者通过外部设备实现。
