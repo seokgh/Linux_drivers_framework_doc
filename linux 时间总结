@@ -1,0 +1,147 @@
+linux 时间总结
+
+一、内核时间的相关概念
+　　系统时间：自系统启动开始所经过的时间。
+
+时钟中断：
+            内核会周期性的产生时钟中断，在中断处理函数中执行一些与时间相关的操作，如更新时间，进程调度，检查时间片等。
+  
+节拍率：
+      在linux内核中，通过编程定义节拍率，也就是HZ。每1/HZ秒发生一次时钟中断。      
+      在ARM中，节拍率被定义为100，节拍率越大，系统进入时钟中断就越频繁，时间和进程调度等操作就越准确，但对系统的负担也越大。
+
+jiffies：该32位（unsigned long）的全局变量用来记录自系统启动以来产生的节拍的总数。系统启动时清零，每次时钟中断加一。所以，一秒内的时钟中断次数（或者说jiffies一秒内增加的值）也就等于HZ。如果系统时间以秒来表示，那就等于jiffies/HZ秒。
+实时时钟（RTC）：体系结构中用于维持系统时间的设备，在关机状态时通过电池供电。系统启动时通过读取RTC来初始化时钟。
+
+
+补充说一下HZ的值， 在ARM下可以看到如下定义： arch/arm/include/asm/param.h
+
+13 #ifdef __KERNEL__
+14 # define HZ CONFIG_HZ /* Internal kernel timer frequency */
+15 # define USER_HZ 100 /* User interfaces are in "ticks" */
+16 # define CLOCKS_PER_SEC (USER_HZ) /* like times() */
+17 #else
+18 # define HZ 100
+19 #endif
+
+可以看到：
+1、用户空间但到的HZ是100。
+2、内核空间的HZ有CONFIG_HZ和__KERNEL__决定，而CONFIG_HZ在.config中定义。
+在看另外一处，查看自己编译内核时使用的.config文件：
+/*linux-2.6.29/.config */
+275 CONFIG_HZ=200
+所以，我的开发板的HZ当前定义为200
+
+
+
+
+二、内核延时
+
+内核提供了很多延时的方法，接下来一一介绍。
+
+2.1、忙等待：
+
+这是最简单的延时方法，直接来段代码说明：
+unsigned long delay = jiffies + 5*HZ //5*HZ = 5秒
+
+while(delay < jiffies)
+;
+
+内核也有另外一种版本：
+unsigned long delay = jiffies + 5*HZ //5*HZ = 5秒
+
+while(delay < jiffies)
+cpu_relax; //但ARM下cpu_relax是空语句。
+这代码很简单，每时每刻查询当前时间（jiffies）是否已经超出延时（delay）。在还没到达延时的情况下，处理器只能原地旋转等待，一直耗费CPU资源。
+
+所以有了改进版：让出处理器。
+unsigned long delay = jiffies + 5*HZ //5*HZ = 5秒
+
+while(delay < jiffies)
+schedule(); //让出处理器
+虽然当前进程让出处理器，但是它仍在运行队列中，如果系统中只有它这个可运行进程，那么该进程又会重新被执行。那就是说，在延时这段时间内，内核重复一个操作，调度进程。所以我把这个也理解成忙等待。
+说一些题外话，jiffies是一个unsigned long类型的全局变量，当加到4294967295时溢出，从零开始继续增加，这也叫回绕。
+由于回绕的问题，内核提供了四个宏来比较超时，它们能正确的处理节拍数回绕情况。
+
+/*linux/jiffies.h */
+106 #define time_after(a,b) \
+107 (typecheck(unsigned long, a) && \
+108 typecheck(unsigned long, b) && \
+109 ((long)(b) - (long)(a) < 0))
+110 #define time_before(a,b) time_after(b,a)
+111
+112 #define time_after_eq(a,b) \
+113 (typecheck(unsigned long, a) && \
+114 typecheck(unsigned long, b) && \
+115 ((long)(a) - (long)(b) >= 0))
+116 #define time_before_eq(a,b) time_after_eq(b,a)
+
+至于为什么能防止回绕，我也纠结了一个上午，
+该博客有详细的讲解，顺便感叹一下牛人无处不在：http://blog.csdn.net/yuanlulu/archive/2010/11/18/6019862.aspx
+上面的代码修改一下：
+unsigned long delay = jiffies + 5*HZ //5*HZ = 5秒
+
+while(time_before(jiffies, delay))
+      schedule(); //让出处理器
+
+
+
+
+2.2、短延时：
+忙等待的最小时间间隔是1/HZ秒，假设HZ的值为100，那忙等待的时间间隔最小也只是10ms。但在有些内核代码中，不但需要很短的延时，而且时间精确度较高。
+#include <linux/delay.h>
+void ndelay(unsigned long nsecs);
+void udelay(unsigned long usecs);
+void mdelay(unsigned long msecs);
+
+udelay(150); //延时150微秒
+
+说明一下：
+   1、一般的体系架构都没办法达到纳秒级的延时标准。
+   2、udelay的实现是靠执行次数循环达到延时效果。内核知道处理器一秒能执行多少次循环，udelay根据执行的延时时间在1s中的比例，得出需要延时的次数来达到延时。
+   3、mdelay是基于udelay实现的。超过1ms的延时不要使用udelay，建议使用mdelay。
+   4、不管是哪种延时，真正的延时至少会达到要求的延时时间，但可能更长。
+   5、它们也属于忙等待的一种，不过延时时间较短。
+
+
+
+
+2.3、schedule_timeout()：
+
+更理想的延时方法是使用schedule_timeout()函数，该方法让需要延时的任务睡眠，直到指定延时时间耗尽后重新执行。当然它也不能保证睡眠时间和延时时间一致，只能尽量接近。
+    用法如下：
+/*将任务设置为可中断睡眠状态，当然你也可以设置为TASK_UNINTERRUPTIBLE，但不建议*/
+set_current_state(TASK_INTERRUPTIBLE);
+/*小睡一会，s秒后唤醒*/
+     schedule_timeout(s*HZ);
+
+
+
+
+
+2.4、设置超时时间，在等待队列中睡眠：
+
+在字符设备驱动的时候已经介绍过等待队列的基本原理：当任务放在等待队列中，然后调度其他进程执行，一旦等待的事情成立，调用wake_up唤醒等待队列中的进程并重新投入运行。
+    上面讲得是函数wait_event_interruptible。在这个函数的基础上，增加了延时功能。如果在特定延时时间内等待事件到来，那任务被唤醒。否则，等到特定延时时间耗尽后事件还没发生，那也得唤醒任务。
+/*linux/wait.h*/
+wait_event_interruptible_timeout(wq, condition, timeout)
+     使用大概如下：
+wait_queue_head_t wait;
+init_qaitqueue_head(&wait);
+wait_event_interruptible_timeout(wait, 0, s*HZ); //延时s秒
+    上面的调用condition为0，那表示等待时间永远不成立，只有时间到才能唤醒，相当于：
+set_current_state(TASK_INTERRUPTIBLE);
+schedule_timeout(s*HZ);
+而且，schedule_timeout还少了等待队列创建的操作，减少内核负担。所以，如果不是既要等待延时，又要等待时间发生，那就没必要用到等待队列的延时了。
+
+
+三、总结
+
+这一节，简单介绍了内核时间的概念，并知道了几种常用的延时方法。
+最后提醒一下，在持有锁和禁止中断时使用忙等待，因为这样会降低系统的速度和性能。
+
+
+
+
+
+
