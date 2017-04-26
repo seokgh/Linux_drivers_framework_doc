@@ -29,18 +29,21 @@ jiffies的内部表示
 */
 extern u64 __jiffy_data jiffies_64;
 extern unsigned long volatile __jiffy_data jiffies;
-ld(1)脚本用于连接主内核映像（在x86上位于arch/i386/kernel/vmlinux.lds.S中），然后用jiffies_64变量的初值覆盖jiffies变量。因此jiffies取整个jiffies_64变量的低32位。
+ld(1)脚本用于连接主内核映像（在x86上位于arch/i386/kernel/vmlinux.lds.S中），然后用jiffies_64变量的初值覆盖jiffies变量。
+因此jiffies取整个jiffies_64变量的低32位。
 
-  访问jiffies的代码只会读取jiffies_64的低32位，通过get_jiffies_64()函数就可以读取整个64位的值。在64位体系结构上，jiffies_64和jiffies指的是同一个变量。
+访问jiffies的代码只会读取jiffies_64的低32位，通过get_jiffies_64()函数就可以读取整个64位的值。
+在64位体系结构上，jiffies_64和jiffies指的是同一个变量。
 
 #if (BITS_PER_LONG < 64)
 u64 get_jiffies_64(void);
 #else
 static inline u64 get_jiffies_64(void)
 {
-return (u64)jiffies;
+   return (u64)jiffies;
 }
 #endif
+
 在<Time.c(kernel)>中
 #if (BITS_PER_LONG < 64)
 u64 get_jiffies_64(void)
@@ -53,11 +56,13 @@ do {
     } while (read_seqretry(&xtime_lock, seq));
 return ret;
 }
+
 jiffies的回绕wrap around
-  当jiffies的值超过它的最大存放范围后就会发生溢出。对于32位无符号长整型，最大取值为(2^32)-1,即429496795。如果节拍计数达到了最大值后还要继续增加，它的值就会回绕到0。
+  当jiffies的值超过它的最大存放范围后就会发生溢出。对于32位无符号长整型，最大取值为(2^32)-1,即429496795。如果节拍计数达到了最大值后还要继续增加，
+  它的值就会回绕到0。
 
-  内核提供了四个宏来帮助比较节拍计数，它们能正确的处理节拍计数回绕的问题：
 
+内核提供了四个宏来帮助比较节拍计数，它们能正确的处理节拍计数回绕的问题：
 /*
 *  These inlines deal with timer wrapping correctly. You are
 *  strongly encouraged to use them
@@ -94,14 +99,20 @@ jiffies的回绕wrap around
      typecheck(__u64, b) && \
      ((__s64)(a) - (__s64)(b) >= 0))
 #define time_before_eq64(a,b)   time_after_eq64(b,a)
-用户空间和HZ
-  问题提出：
 
-  在2.6以前的内核中，如果改变内核中的HZ值会给用户空间中某些程序造成异常结果。因为内核是以节拍数/秒的形式给用户空间导出这个值的，应用程序便依赖这个特定的HZ值。如果在内核中改变了HZ的定义值，就打破了用户空间的常量关系---用户空间并不知道新的HZ值。
+
+
+
+
+用户空间和HZ 的问题的提出：
+
+  在2.6以前的内核中，如果改变内核中的HZ值会给用户空间中某些程序造成异常结果。因为内核是以节拍数/秒的形式给用户空间导出这个值的，
+  应用程序便依赖这个特定的HZ值。如果在内核中改变了HZ的定义值，就打破了用户空间的常量关系---用户空间并不知道新的HZ值。
 
   解决方法：
-
-  内核更改所有导出的jiffies值。内核定义了USER_HZ来代表用户空间看到的HZ值。在x86体系结构上，由于HZ值原来一直是100，所以USER_HZ值就定义为100。内核可以使用宏jiffies_to_clock_t()将一个有HZ表示的节拍计数转换为一个由USER_HZ表示的节拍计数。
+  
+  内核更改所有导出的jiffies值。内核定义了USER_HZ来代表用户空间看到的HZ值。在x86体系结构上，由于HZ值原来一直是100，所以USER_HZ值就定义为100。
+  内核可以使用宏jiffies_to_clock_t()将一个有HZ表示的节拍计数转换为一个由USER_HZ表示的节拍计数。
 
 在<Time.c(kernel)>中
 /*
