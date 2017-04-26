@@ -1,0 +1,52 @@
+Linux内核全局变量总结
+
+
+1.current指针
+各个平台、各个内核版本中current的实现可能不同；但原理是一样的。该指针一般定义在具体平台的current.h头文件中，类型为struct task_struct：
+
+arch/arm/include/asm/current.h
+
+#define current (get_current())    
+static inline struct task_struct *get_current(void)
+
+include/Linux/sched.h
+
+struct task_struct {    
+  ......    
+  struct thread_info *thread_info;    
+  struct list_head tasks;    
+  pid_t pid;    
+  pid_t tgid;    
+  uid_t uid,euid,suid,fsuid;    
+  gid_t gid,egid,sgid,fsgid;    
+  struct fs_struct *fs;  
+  struct files_struct *files;    
+  ......    
+}
+
+
+
+
+2.jiffies系统开机后“滴答”数
+include/linux/jiffies.h
+
+extern u64 __jiffy_data jiffies_64;  
+extern unsigned long volatile __jiffy_data jiffies;
+
+
+
+
+3.HZ、tick系统晶振主频，平台相关
+arch/arm/include/asm/param.h
+
+#ifdef __KERNEL__  
+# define HZ             CONFIG_HZ       /* Internal kernel timer frequency */  
+# define USER_HZ        100             /* User interfaces are in "ticks" */  
+# define CLOCKS_PER_SEC (USER_HZ)       /* like times() */  
+#else  
+# define HZ             100  
+#endif
+
+include/linux/timex.h
+extern unsigned long tick_usec;         /* USER_HZ period (usec) */  
+extern unsigned long tick_nsec;         /* ACTHZ   period (nsec) */  
