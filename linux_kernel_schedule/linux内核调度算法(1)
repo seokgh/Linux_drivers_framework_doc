@@ -3,15 +3,23 @@ linux内核调度算法（1）--快速找到最高优先级进程
 2011-12-22 11:17 7705人阅读 
 
 
-为什么要了解内核的调度策略呢？呵呵，因为它值得我们学习，不算是废话吧。内核调度程序很先进很强大，管理你的Linux上跑的大量的乱七八糟的进程，同时还保持着对用户操作的高灵敏响应，如果可能，为什么不把这种思想放到自己的应用程序里呢？或者，有没有可能更好的实现自己的应用，使得操作系统能够以自己的意志来分配资源给自己的进程？
+为什么要了解内核的调度策略呢？呵呵，因为它值得我们学习，不算是废话吧。内核调度程序很先进很强大，管理你的Linux上跑的大量的乱七八糟的进程，
+同时还保持着对用户操作的高灵敏响应，如果可能，为什么不把这种思想放到自己的应用程序里呢？或者，有没有可能更好的实现自己的应用，使得操作系统能够以自己
+的意志来分配资源给自己的进程？
 
 
-带着这两个问题来看看KERNEL。首先回顾上我们开发应用程序，基本上就两种类型，1、IO消耗型：比如hadoop上的trunk服务，很明显它的消耗主要在IO上，包括网络IO磁盘IO等等。2、CPU消耗型，比如mapreduce或者其他的需要对大量数据进行计算处理的组件，就象对高清视频压缩成适合手机观看分辨率的进程，他们的消耗主要在CPU上。当两类进程都在一台SERVER上运行时，操作系统会如何调度它们呢？现在的服务器都是SMP多核的，那么一个进程在多CPU时会来回切换吗？如果我有一个程序，既有IO消耗又有CPU消耗，怎么让多核更好的调度我的程序呢？
+带着这两个问题来看看KERNEL。首先回顾上我们开发应用程序，基本上就两种类型，
+1、IO消耗型：比如hadoop上的trunk服务，很明显它的消耗主要在IO上，包括网络IO磁盘IO等等。
+2、CPU消耗型，比如mapreduce或者其他的需要对大量数据进行计算处理的组件，就象对高清视频压缩成适合手机观看分辨率的进程，他们的消耗主要在CPU上。
+
+当两类进程都在一台SERVER上运行时，操作系统会如何调度它们呢？现在的服务器都是SMP多核的，那么一个进程在多CPU时会来回切换吗？
+如果我有一个程序，既有IO消耗又有CPU消耗，怎么让多核更好的调度我的程序呢？
 
 
 又多了几个问题。来看看内核调度程序吧，我们先从它的优先队列谈起吧。调度程序代码就在内核源码的kernel/sched.c的schedule函数中。
-首先看下面的优先级队列，每一个runqueue都有。runqueue是什么？下面会详细说下，现在大家可以理解为，内核为每一颗CPU分配了一个runqueue，用于维护这颗CPU可以运行的进程。runqueue里，有几个成员是prio_array类型，这个东东就是优先队列，先看看它的定义：
-[cpp] view plain copy
+首先看下面的优先级队列，每一个runqueue都有。runqueue是什么？下面会详细说下，现在大家可以理解为，内核为每一颗CPU分配了一个runqueue，用于维护这颗
+CPU可以运行的进程。runqueue里，有几个成员是prio_array类型，这个东东就是优先队列，先看看它的定义：
+
 struct prio_array {  
     unsigned int nr_active;    表示等待执行的进程总数  
     unsigned long bitmap[BITMAP_SIZE];    一个unsigned long在内核中只有32位哈，大家要跟64位OS上的C程序中的long区分开，那个是64位的。那么这个bitmap是干什么的呢？它是用位的方式，表示某个优先级上有没有待处理的队列，是实现快速找到最高待处理优先进程的关键。如果我定义了四种优先级，我只需要四位就能表示某个优先级上有没有进程要运行，例如优先级是2和3上有进程，那么就应该是0110.......非常省空间，效率也快，不是吗？  
@@ -21,7 +29,7 @@ struct prio_array {
 
 看看BITMAP_SIZE是怎么算出来的：#define BITMAP_SIZE ((((MAX_PRIO+1+7)/8)+sizeof(long)-1)/sizeof(long))
 那么，LINUX默认配置（如果你用默认选项编译内核的话）MAX_PRIO是140，就是说一共内核对进程一共定义了140种优先级。等待某个CPU来处理的进程中，可能包含许多种优先级的进程，但，LINUX是个抢占式调度算法的操作系统，就是说，需要调度时一定是找到最高优先级的进程执行。上面的BITMAP_SIZE值根据MAX_PRIO算出来为5，那么bitmap实际是32*5=160位，这样就包含了MAX_PRIO的140位。优先级队列是怎么使用的？看2649行代码：idx = sched_find_first_bit(array->bitmap);这个方法就用来快速的找到优先级最高的队列。看看它的实现可以方便我们理解这个优先级位的设计：
-[cpp] view plain copy
+
 static inline int sched_find_first_bit(unsigned long *b)  
 {  
     if (unlikely(b[0]))  
@@ -36,7 +44,7 @@ static inline int sched_find_first_bit(unsigned long *b)
 }  
 
 那么__ffs是干什么的？
-[cpp] view plain copy
+
 static inline int __ffs(int x)  
 {  
     int r = 0;  
@@ -70,7 +78,7 @@ sched_find_first_bit返回值就是最高优先级所在队列的序号，与que
 
 
 好，优先级队列搞明白了，现在来看看runqueue，每个runqueue包含三个优先级队列。
-[cpp] view plain copy
+
 struct runqueue {  
     spinlock_t lock;   这是个自旋锁，nginx里解决惊群现象时也是用这个。与普通锁的区别就是，使用普通锁时，你去试图拿一把锁，结果发现已经被别人拿走了，你就在那睡觉，等别人锁用完了叫你起来。所以如果有一个人拿住锁了，一百个人都在门前睡觉等。当之前的人用完锁回来后，会叫醒所有100个等锁的人，然后这些人开始互相抢，抢到的人拿锁进去，其他的人继续等。自旋锁不同，当他去拿锁发现锁被别人拿走了，他在那不睡觉的等，稍打个盹就看看自己主动看看锁有没有还回来。大家比较出优劣了吗？  
   
@@ -109,7 +117,7 @@ LINUX是一个时间多路复用的系统，就是说，通过把CPU执行时间
 
 
 这么设计的好处就是不用再循环一遍所有进程重设时间片了，看看调度函数是怎么玩的：
-[cpp] view plain copy
+
 array = rq->active;  
 if (unlikely(!array->nr_active)) {  
     /* 
@@ -129,7 +137,7 @@ if (unlikely(!array->nr_active)) {
 
 
 再看一下schedule(void)调度函数，当某个进程休眠或者被抢占时，系统就开始调试schedule(void)决定接下来运行哪个进程。上面说过的东东都在这个函数里有体现哈。
-[cpp] view plain copy
+
 asmlinkage void __sched schedule(void)  
 {  
     long *switch_count;  
