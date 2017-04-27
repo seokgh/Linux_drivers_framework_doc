@@ -1,0 +1,52 @@
+How to implement elapsed time by jiffies?
+
+
+
+
+You can do something like this :
+
+      struct timeval start, finish;
+      long delta_usecs;
+
+      do_gettimeofday(&start);
+      ..
+      // execute your processing here
+      ..
+      do_gettimeofday(&finish);
+
+      delta_usecs = (finish.tv_sec - start.tv_sec) * 1000000 + (finish.tv_usec - start.tv_usec);
+
+
+
+
+
+
+Since you are working on ARM arch, it may help to check the available resolution of your system timer by 
+insmoding a kernel module that prints on dmesg the resolution:
+
+
+#include <linux/version.h>
+#include <linux/module.h>
+#include <linux/hrtimer.h>
+#include <linux/time.h>
+
+static struct hrtimer timer;
+
+static int __init hrtimer_test_init(void)
+{
+        struct timespec time;
+
+        hrtimer_init(&timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
+        hrtimer_get_res(CLOCK_MONOTONIC, &time);
+        printk(KERN_ERR "resolution : %u secs and %u nsecs.\n", time.tv_sec, time.tv_nsec);
+        return 0;
+}
+
+static void __exit hrtimer_test_exit(void)
+{
+        return ;
+}
+
+module_init(hrtimer_test_init);
+module_exit(hrtimer_test_exit);
+MODULE_LICENSE("GPL");
