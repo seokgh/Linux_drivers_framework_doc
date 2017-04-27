@@ -1,0 +1,168 @@
+  1 /*
+  2  * ALSA timer back-end using hrtimer
+  3  * Copyright (C) 2008 Takashi Iwai
+  4  *
+  5  *   This program is free software; you can redistribute it and/or modify
+  6  *   it under the terms of the GNU General Public License as published by
+  7  *   the Free Software Foundation; either version 2 of the License, or
+  8  *   (at your option) any later version.
+  9  *
+ 10  *   This program is distributed in the hope that it will be useful,
+ 11  *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ 12  *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ 13  *   GNU General Public License for more details.
+ 14  *
+ 15  *   You should have received a copy of the GNU General Public License
+ 16  *   along with this program; if not, write to the Free Software
+ 17  *   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
+ 18  *
+ 19  */
+ 20 
+ 21 #include <linux/init.h>
+ 22 #include <linux/slab.h>
+ 23 #include <linux/module.h>
+ 24 #include <linux/moduleparam.h>
+ 25 #include <linux/hrtimer.h>
+ 26 #include <sound/core.h>
+ 27 #include <sound/timer.h>
+ 28 
+ 29 MODULE_AUTHOR("Takashi Iwai <tiwai@suse.de>");
+ 30 MODULE_DESCRIPTION("ALSA hrtimer backend");
+ 31 MODULE_LICENSE("GPL");
+ 32 
+ 33 MODULE_ALIAS("snd-timer-" __stringify(SNDRV_TIMER_GLOBAL_HRTIMER));
+ 34 
+ 35 #define NANO_SEC        1000000000UL    /* 10^9 in sec */
+ 36 static unsigned int resolution;
+ 37 
+ 38 struct snd_hrtimer {
+ 39         struct snd_timer *timer;
+ 40         struct hrtimer hrt;
+ 41         atomic_t running;
+ 42 };
+ 43 
+ 44 static enum hrtimer_restart snd_hrtimer_callback(struct hrtimer *hrt)
+ 45 {
+ 46         struct snd_hrtimer *stime = container_of(hrt, struct snd_hrtimer, hrt);
+ 47         struct snd_timer *t = stime->timer;
+ 48         unsigned long oruns;
+ 49 
+ 50         if (!atomic_read(&stime->running))
+ 51                 return HRTIMER_NORESTART;
+ 52 
+ 53         oruns = hrtimer_forward_now(hrt, ns_to_ktime(t->sticks * resolution));
+ 54         snd_timer_interrupt(stime->timer, t->sticks * oruns);
+ 55 
+ 56         if (!atomic_read(&stime->running))
+ 57                 return HRTIMER_NORESTART;
+ 58         return HRTIMER_RESTART;
+ 59 }
+ 60 
+ 61 static int snd_hrtimer_open(struct snd_timer *t)
+ 62 {
+ 63         struct snd_hrtimer *stime;
+ 64 
+ 65         stime = kmalloc(sizeof(*stime), GFP_KERNEL);
+ 66         if (!stime)
+ 67                 return -ENOMEM;
+ 68         hrtimer_init(&stime->hrt, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+ 69         stime->timer = t;
+ 70         stime->hrt.function = snd_hrtimer_callback;
+ 71         atomic_set(&stime->running, 0);
+ 72         t->private_data = stime;
+ 73         return 0;
+ 74 }
+ 75 
+ 76 static int snd_hrtimer_close(struct snd_timer *t)
+ 77 {
+ 78         struct snd_hrtimer *stime = t->private_data;
+ 79 
+ 80         if (stime) {
+ 81                 hrtimer_cancel(&stime->hrt);
+ 82                 kfree(stime);
+ 83                 t->private_data = NULL;
+ 84         }
+ 85         return 0;
+ 86 }
+ 87 
+ 88 static int snd_hrtimer_start(struct snd_timer *t)
+ 89 {
+ 90         struct snd_hrtimer *stime = t->private_data;
+ 91 
+ 92         atomic_set(&stime->running, 0);
+ 93         hrtimer_cancel(&stime->hrt);
+ 94         hrtimer_start(&stime->hrt, ns_to_ktime(t->sticks * resolution),
+ 95                       HRTIMER_MODE_REL);
+ 96         atomic_set(&stime->running, 1);
+ 97         return 0;
+ 98 }
+ 99 
+100 static int snd_hrtimer_stop(struct snd_timer *t)
+101 {
+102         struct snd_hrtimer *stime = t->private_data;
+103         atomic_set(&stime->running, 0);
+104         return 0;
+105 }
+106 
+107 static struct snd_timer_hardware hrtimer_hw = {
+108         .flags =        SNDRV_TIMER_HW_AUTO | SNDRV_TIMER_HW_TASKLET,
+109         .open =         snd_hrtimer_open,
+110         .close =        snd_hrtimer_close,
+111         .start =        snd_hrtimer_start,
+112         .stop =         snd_hrtimer_stop,
+113 };
+114 
+115 /*
+116  * entry functions
+117  */
+118 
+119 static struct snd_timer *mytimer;
+120 
+121 static int __init snd_hrtimer_init(void)
+122 {
+123         struct snd_timer *timer;
+124         struct timespec tp;
+125         int err;
+126 
+127         hrtimer_get_res(CLOCK_MONOTONIC, &tp);
+128         if (tp.tv_sec > 0 || !tp.tv_nsec) {
+129                 snd_printk(KERN_ERR
+130                            "snd-hrtimer: Invalid resolution %u.%09u",
+131                            (unsigned)tp.tv_sec, (unsigned)tp.tv_nsec);
+132                 return -EINVAL;
+133         }
+134         resolution = tp.tv_nsec;
+135 
+136         /* Create a new timer and set up the fields */
+137         err = snd_timer_global_new("hrtimer", SNDRV_TIMER_GLOBAL_HRTIMER,
+138                                    &timer);
+139         if (err < 0)
+140                 return err;
+141 
+142         timer->module = THIS_MODULE;
+143         strcpy(timer->name, "HR timer");
+144         timer->hw = hrtimer_hw;
+145         timer->hw.resolution = resolution;
+146         timer->hw.ticks = NANO_SEC / resolution;
+147 
+148         err = snd_timer_global_register(timer);
+149         if (err < 0) {
+150                 snd_timer_global_free(timer);
+151                 return err;
+152         }
+153         mytimer = timer; /* remember this */
+154 
+155         return 0;
+156 }
+157 
+158 static void __exit snd_hrtimer_exit(void)
+159 {
+160         if (mytimer) {
+161                 snd_timer_global_free(mytimer);
+162                 mytimer = NULL;
+163         }
+164 }
+165 
+166 module_init(snd_hrtimer_init);
+167 module_exit(snd_hrtimer_exit);
+168 
