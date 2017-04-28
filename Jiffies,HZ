@@ -9,13 +9,8 @@
 
 注意，jiffies类型为无符号长整型(unsigned long)，其他任何类型存放它都不正确。
 
-将以秒为单位的时间转化为jiffies：
-
-seconds * Hz
-
-将jiffies转化为以秒为单位的时间：
-
-jiffies / Hz
+将以秒为单位的时间转化为jiffies：   seconds * Hz
+将jiffies转化为以秒为单位的时间：   jiffies / Hz
 
 相比之下，内核中将秒转换为jiffies用的多些。
 
