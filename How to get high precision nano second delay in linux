@@ -1,0 +1,56 @@
+//How to get high precision nano second delay in linux
+
+
+#include <linux/module.h>
+#include <linux/init.h>
+#include <linux/kernel.h>
+#include <linux/time.h>
+#include <linux/delay.h>
+
+static int __init initialize(void)
+{
+    ktime_t start, end;
+    s64 actual_time;
+    int i;
+    for(i=0;i<10;i++)
+    {
+        start = ktime_get();
+            ndelay(100);            
+        end = ktime_get();
+        actual_time = ktime_to_ns(ktime_sub(end, start));
+        printk("%lld\n",(long long)actual_time);    
+    }
+    return 0;
+}
+
+static void __exit final(void)
+{
+     printk(KERN_INFO "Unload module\n");
+}
+
+module_init(initialize);
+module_exit(final);
+
+MODULE_AUTHOR("Bhaskar");
+MODULE_DESCRIPTION("delay of 100ns");
+MODULE_LICENSE("GPL");
+
+
+
+////////////////////////////////////////////////
+the dmesg output is like this:
+
+[16603.805783] 514
+[16603.805787] 350
+[16603.805789] 373
+[16603.805791] 323
+[16603.805793] 362
+[16603.805794] 320
+[16603.805796] 331
+[16603.805797] 312
+[16603.805799] 304
+[16603.805801] 350
+
+I have gone through one of the posts in stackoverflow: Why udelay and ndelay is not accurate in linux kernel?
+
+But I want a fine tuned nanosecond delay (probably in the range of 100-250ns) in kernel space. Can anyone please suggest me any alternative for doing this?
