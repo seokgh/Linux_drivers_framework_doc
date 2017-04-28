@@ -1,0 +1,91 @@
+High-resolution timer API
+
+The hrtimer API has some similarities to the traditional API as well as some fundamental differences to account for the additional timing control. The first thing you'll notice is that time is represented not in jiffies but in a special data type called ktime. This representation hides some of the details of efficiently managing time at this granularity. The API formalizes the distinction between absolute and relative times, requiring the caller to specify the type.
+Like the traditional timer API, timers are represented by a structure—in this case, hrtimer. This structure defines the timer from a user perspective (callback function, expiration time, and so on) and also incorporates the management information (where the timer exists in the red-black tree, optional statistics, and so on).
+The process begins with the initialization of a timer through hrtimer_init. This call includes the timer, clock definition, and timer mode (one-shot or restart). The clock to use is defined in ./include/linux/time.h and represents the various clocks that the system supports (such as the real-time clock or a monotonic clock that simply represents time from a starting point, such as system boot). Once a timer has been initialized, it can be started with hrtimer_start. This call includes the expiration time (in ktime_t) and the mode of the time value (absolute or relative value).
+
+
+void  hrtimer_init( struct hrtimer *time, clockid_t which_clock, enum hrtimer_mode mode );
+int   hrtimer_start(struct hrtimer *timer, ktime_t time, const enum hrtimer_mode mode);
+
+
+Once an hrtimer has started, it can be cancelled through a call to hrtimer_cancel or hrtimer_try_to_cancel. Each function includes the hrtimer reference as the timer to be stopped. These functions differ in that the hrtimer_cancel function attempts to cancel the timer, but if it has already fired, it will wait for the callback function to finish. The hrtimer_try_to_cancel function differs in that it also attempts to cancel the timer but will return failure if the timer has fired.
+
+  int hrtimer_cancel(struct hrtimer *timer);
+  int hrtimer_try_to_cancel(struct hrtimer *timer);
+
+You can check to see if the hrtimer has activated its callback through a call to hrtimer_callback_running. Note that this function is called internally by hrtimer_try_to_cancel in order to return an error if the timer's callback function was called.
+
+  int  hrtimer_callback_running(struct hrtimer *timer);
+
+The ktime API
+Not discussed here was the ktime API, which provides a rich set of functions for managing time at high resolution. 
+You can see the ktime API in ./linux/include/ktime.h.
+An hrtimer example
+Use of the hrtimer API is quite simple, as shown in Listing 2. 
+Within init_module, you start by defining your relative time to time-out (in this case, 200ms). 
+
+You initialize your hrtimer with a call to hrtimer_init (using the monotonic clock), and then set the callback function. 
+
+Finally, you start the timer using your previously created ktime value. 
+When the timer fires, the my_hrtimer_callback function is called, which returns HRTIMER_NORESTART so that the timer is not
+automatically restarted. In the cleanup_module function, you clean up by cancelling the timer with hrtimer_cancel.
+
+
+
+Listing 2. Exploring the hrtimer API
+
+#include <linux/kernel.h>
+#include <linux/module.h>
+#include <linux/hrtimer.h>
+#include <linux/ktime.h>
+ 
+MODULE_LICENSE("GPL");
+ 
+#define MS_TO_NS(x) (x * 1E6L)
+ 
+static struct hrtimer hr_timer;
+ 
+enum hrtimer_restart my_hrtimer_callback( struct hrtimer *timer )
+{
+  printk( "my_hrtimer_callback called (%ld).\n", jiffies );
+ 
+  return HRTIMER_NORESTART;
+}
+ 
+int init_module( void )
+{
+  ktime_t ktime;
+  unsigned long delay_in_ms = 200L;
+ 
+  printk("HR Timer module installing\n");
+ 
+  ktime = ktime_set( 0, MS_TO_NS(delay_in_ms) );
+ 
+  hrtimer_init( &hr_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL );
+   
+  hr_timer.function = &my_hrtimer_callback;
+ 
+  printk( "Starting timer to fire in %ldms (%ld)\n", delay_in_ms, jiffies );
+ 
+  hrtimer_start( &hr_timer, ktime, HRTIMER_MODE_REL );
+ 
+  return 0;
+}
+ 
+void cleanup_module( void )
+{
+  int ret;
+ 
+  ret = hrtimer_cancel( &hr_timer );
+  if (ret) printk("The timer was still in use...\n");
+ 
+  printk("HR Timer module uninstalling\n");
+ 
+  return;
+}
+
+There's much more to the hrtimer API than has been touched on here. 
+One interesting aspect is the ability to define the execution context of the callback function (such as in softirq or hardiirq context). 
+You can learn more about the hrtimer API from the include file in ./include/linux/hrtimer.h
+
