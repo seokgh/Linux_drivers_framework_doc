@@ -33,6 +33,10 @@ automatically restarted. In the cleanup_module function, you clean up by cancell
 
 
 
+
+
+
+
 Listing 2. Exploring the hrtimer API
 
 #include <linux/kernel.h>
@@ -89,3 +93,42 @@ There's much more to the hrtimer API than has been touched on here.
 One interesting aspect is the ability to define the execution context of the callback function (such as in softirq or hardiirq context). 
 You can learn more about the hrtimer API from the include file in ./include/linux/hrtimer.h
 
+
+
+//----------------------------------------------------------------------------------------------
+如果定时器无需指定一个到期范围，可以在设定回调函数后, 直接使用hrtimer_start激活该定时器：
+      int hrtimer_start(struct hrtimer *timer, ktime_t tim, const enum hrtimer_mode mode);
+
+如果需要指定到期范围，则可以使用hrtimer_start_range_ns激活定时器：
+      hrtimer_start_range_ns(struct hrtimer *timer, ktime_t tim, unsigned long range_ns, const enum hrtimer_mode mode);
+
+要取消一个hrtimer，使用hrtimer_cancel：
+      int hrtimer_cancel(struct hrtimer *timer); 
+
+以下两个函数用于推后定时器的到期时间：
+
+      extern u64 hrtimer_forward(struct hrtimer *timer, ktime_t now, ktime_t interval);  
+  
+      /* Forward a hrtimer so it expires after the hrtimer's current now */  
+      static inline u64 hrtimer_forward_now(struct hrtimer *timer, ktime_t interval)  
+      {  
+          return hrtimer_forward(timer, timer->base->get_time(), interval);  
+      }  
+
+
+以下几个函数用于获取定时器的当前状态：
+static inline int hrtimer_active(const struct hrtimer *timer)  
+{  
+    return timer->state != HRTIMER_STATE_INACTIVE;  
+}  
+  
+static inline int hrtimer_is_queued(struct hrtimer *timer)  
+{  
+    return timer->state & HRTIMER_STATE_ENQUEUED;  
+}  
+  
+static inline int hrtimer_callback_running(struct hrtimer *timer)  
+{  
+    return timer->state & HRTIMER_STATE_CALLBACK;  
+} 
+//----------------------------------------------------------------------------------------------
