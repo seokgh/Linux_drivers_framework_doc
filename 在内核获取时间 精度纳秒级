@@ -1,0 +1,28 @@
+////////////////////////////////////////////////
+在内核获取时间 精度纳秒
+////////////////////////////////////////////////
+
+代码：
+    struct timespec ts;
+    ts = current_kernel_time();
+    printk(KERN_ALERT "%ld %ld\n", ts.tv_sec, ts.tv_nsec);
+    
+    struct timeval tv;
+    
+    do_gettimeofday(&tv);   /*获取时间*/
+    printk(KERN_ALERT "now: %ld %ld\n", tv.tv_sec, tv.tv_usec);
+    
+    ts.tv_sec = tv.tv_sec + 3600*5;  /*设置时间， 时钟调后5小时*/
+    do_settimeofday(&ts);
+    
+    printk(KERN_ALERT "after 5 hours: %ld %ld\n", tv.tv_sec, tv.tv_usec);
+
+
+输出日志：
+Jun 30 23:17:29 localhost kernel: now: 1309447049 608761
+Jun 30 23:17:29 localhost kernel: after 5 hours: 1309447049 608761
+Jun 30 23:18:13 localhost kernel: Goodbye, cruel world
+Jul  1 04:18:22 localhost kernel: Hello, world
+Jul  1 04:18:22 localhost kernel: 1309447102 738475231
+Jul  1 04:18:22 localhost kernel: now: 1309447102 739073
+Jul  1 04:18:22 localhost kernel: after 5 hours: 1309447102 739073
