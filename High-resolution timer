@@ -96,14 +96,54 @@ You can learn more about the hrtimer API from the include file in ./include/linu
 
 
 //----------------------------------------------------------------------------------------------
-如果定时器无需指定一个到期范围，可以在设定回调函数后, 直接使用hrtimer_start激活该定时器：
-      int hrtimer_start(struct hrtimer *timer, ktime_t tim, const enum hrtimer_mode mode);
+低分辨率定时器使用5个链表数组来组织timer_list结构，形成了著名的时间轮概念，对于高分辨率定时器，我们期望组织它们的数据结构至少具备以下条件：
 
+1. 稳定而且快速的查找能力；
+2. 快速地插入和删除定时器的能力；
+3. 排序功能；
+
+内核的开发者考察了多种数据结构，例如基数树、哈希表等等，最终他们选择了红黑树（rbtree）来组织hrtimer，红黑树已经以库的形式存在于内核中，
+并被成功地使用在 内存管理子系统 和 文件系统中，
+随着系统的运行，hrtimer不停地被创建和销毁，新的hrtimer按顺序被插入到红黑树中，树的最左边的节点就是最快到期的定时器，
+内核用一个hrtimer结构来表示一个高精度定时器.
+
+
+
+2.  hrtimer如何运转
+  hrtimer的实现需要一定的硬件基础，它的实现依赖于我们前几章介绍的timekeeper和clock_event_device，
+
+  只要先知道，一旦开启了hrtimer，tick_device所关联的clock_event_device的事件回调函数会被修改为：hrtimer_interrupt，
+  并且会被设置成工作于CLOCK_EVT_MODE_ONESHOT单触发模式。
+
+
+2.1  添加一个hrtimer
+  要添加一个hrtimer，系统提供了一些api供我们使用，首先我们需要定义一个hrtimer结构的实例，然后用hrtimer_init函数对它进行初始化，它的原型如下：
+
+  void hrtimer_init(struct hrtimer *timer, clockid_t which_clock, enum hrtimer_mode mode);  
+  //which_clock可以是CLOCK_REALTIME、CLOCK_MONOTONIC、CLOCK_BOOTTIME中的一种，
+  //mode则可以是相对时间HRTIMER_MODE_REL，也可以是绝对时间HRTIMER_MODE_ABS。
+  
+  设定回调函数：  
+      timer.function = hr_callback;  
+
+
+
+************************************************************************************************
+如果定时器无需指定一个到期范围，可以在设定回调函数后, 直接使用hrtimer_start激活该定时器：
+************************************************************************************************
+      int hrtimer_start(struct hrtimer *timer, ktime_t tim, const enum hrtimer_mode mode);
+      
+************************************************************************************************
 如果需要指定到期范围，则可以使用hrtimer_start_range_ns激活定时器：
+************************************************************************************************
       hrtimer_start_range_ns(struct hrtimer *timer, ktime_t tim, unsigned long range_ns, const enum hrtimer_mode mode);
 
+************************************************************************************************
 要取消一个hrtimer，使用hrtimer_cancel：
+************************************************************************************************
       int hrtimer_cancel(struct hrtimer *timer); 
+
+
 
 以下两个函数用于推后定时器的到期时间：
 
