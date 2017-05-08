@@ -1,5 +1,6 @@
+/////////////////////////////////////
 Linux下的hrtimer高精度定时器
-
+/////////////////////////////////////
 
 hrtimer高精度定时器的interval由ktime_set(const long secs, const unsigned long nsecs)决定，可做到ns级。
 
@@ -88,6 +89,8 @@ static void __exit module_hrtimer_exit( void )
 module_init(module_hrtimer_init);  
 module_exit(module_hrtimer_exit);  
 MODULE_LICENSE("GPL");
+
+
 
 
 如果在my_hrtimer_callback()里面直接返回HRTIMER_RESTART会导致立即重新进入my_hrtimer_callback()。这时shell对输入没有任何响应。
