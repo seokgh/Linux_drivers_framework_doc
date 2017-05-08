@@ -5,8 +5,10 @@ Linux中线程与CPU核的绑定
 
 最近在对项目进行性能优化，由于在多核平台上，所以了解了些进程、线程绑定cpu核的问题，在这里将所学记录一下。
 
-    不管是线程还是进程，都是通过设置亲和性(affinity)来达到目的。对于进程的情况，一般是使用sched_setaffinity这个函数来实现，网上讲的也比较多，这里主要讲一下线程的情况。
-    与进程的情况相似，线程亲和性的设置和获取主要通过下面两个函数来实现：
+    不管是线程还是进程，都是通过设置亲和性(affinity)来达到目的。
+    对于[进程]的情况，一般是使用sched_setaffinity这个函数来实现，网上讲的也比较多，这里主要讲一下[线程]的情况。
+    
+    与[进程]的情况相似，[线程]亲和性的设置和获取主要通过下面两个函数来实现：
     
     int pthread_setaffinity_np(pthread_t thread, size_t cpusetsize，const cpu_set_t *cpuset);
     int pthread_getaffinity_np(pthread_t thread, size_t cpusetsize, cpu_set_t *cpuset);
