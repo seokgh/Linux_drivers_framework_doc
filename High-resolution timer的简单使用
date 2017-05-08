@@ -1,0 +1,45 @@
+///////////////////////////
+hrtimer的简单使用
+///////////////////////////
+
+
+1.hrtimers - 为高分辨率kernel定时器，可作为[超时]或[周期性定时器]使用.
+
+
+1). hrtimer_init初始化定时器工作模式。
+  hrtimer_init(&vibe_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+  vibe_timer.function = timer_func;   /* 设置定时器的回调函数，定时器到时该函数将被调用 */
+
+        static enum hrtimer_restart timer_func(struct hrtimer *timer) // 注：该回调函数为原子操作, 不能被中断！
+
+2). hrtimer_start的第二个参数用于设置超时参数。
+  hrtimer_start(&vibe_timer, ktime_set(value / 1000, (value % 1000) * 1000000), HRTIMER_MODE_REL);
+
+3). int hrtimer_cancel(struct hrtimer *timer);  /* 要取消一个hrtimer，使用hrtimer_cancel。*/
+
+
+
+
+
+
+/////////////////////////////////////////////////////////////////////////
+static enum hrtimer_restart shi_timer_func(struct hrtimer *timer)    
+{
+      hrtimer_start(&vibe_timer, ktime_set(value / 1000, (value % 1000) * 1000000), HRTIMER_MODE_REL);
+}
+
+static int __init ker_driver_init(void)   
+{   
+   
+    int value = 2000;   /* Time out setting,  2 seconds */   
+    struct timespec uptime;
+    
+    KER_PRINT("ker_driver_init/n");   
+    
+    hrtimer_init(&vibe_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);   
+    vibe_timer.function = shi_timer_func;   
+    hrtimer_start(&vibe_timer, ktime_set(value / 1000, (value % 1000) * 1000000), HRTIMER_MODE_REL);   
+}
+   
+   
+   
