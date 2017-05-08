@@ -1,0 +1,112 @@
+Linux下的hrtimer高精度定时器
+
+
+hrtimer高精度定时器的interval由ktime_set(const long secs, const unsigned long nsecs)决定，可做到ns级。
+
+此处的例子为 5ms interval：
+
+#include <linux/kernel.h>  
+#include <linux/module.h>  
+#include <linux/hrtimer.h>  
+#include <linux/ktime.h>  
+  
+ 
+  
+static struct hrtimer hr_timer;  
+static struct work_struct wq_hrtimer;    
+static ktime_t ktime;  
+static unsigned int interval=5000; /* unit: us */  
+struct timespec uptimeLast;  
+  
+static unsigned int count=0;  
+#define COUNT_INTERVAL 4000  
+unsigned long long diff_tv(struct timespec start, struct timespec end) {  
+    return (end.tv_sec-start.tv_sec)*1000000000+(end.tv_nsec-start.tv_nsec);  
+}  
+  
+enum hrtimer_restart my_hrtimer_callback( struct hrtimer *timer )  
+{  
+    schedule_work(&wq_hrtimer);   
+    return HRTIMER_NORESTART;  
+}  
+  
+static void wq_func_hrtimer(struct work_struct *work)  
+{   
+    struct timespec uptime;  
+  
+    hr_timer.function = my_hrtimer_callback;   
+    ktime = ktime_set( interval/1000000, (interval%1000000)*1000 );  
+    hrtimer_start(&hr_timer, ktime, HRTIMER_MODE_REL );  
+  
+    /* print time every COUNT_INTERVAL*interval second*/  
+    if(count%COUNT_INTERVAL==0)   
+    {  
+        do_posix_clock_monotonic_gettime(&uptime);    
+        printk(KERN_INFO"hrtimer:%9lu sec, %9lu ns, interval_delay=%lu ns\n",   
+            (unsigned long) uptime.tv_sec, uptime.tv_nsec,  
+            (unsigned long)(diff_tv(uptimeLast, uptime)-interval*1000*COUNT_INTERVAL) \  
+                /COUNT_INTERVAL);   
+        uptimeLast=uptime;  
+    }  
+    count++;  
+}   
+  
+static int __init module_hrtimer_init( void )  
+{  
+    struct timespec uptime;   
+      
+    printk(KERN_INFO"HR Timer module installing\n");  
+      
+    hrtimer_init( &hr_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL );  
+    
+    ktime = ktime_set( interval/1000000, (interval%1000000)*1000 );  
+    hr_timer.function = my_hrtimer_callback;  
+  
+    hrtimer_start( &hr_timer, ktime, HRTIMER_MODE_REL );  
+  
+    do_posix_clock_monotonic_gettime(&uptime);  
+    uptimeLast = uptime;  
+    printk(KERN_INFO"hrtimer:%9lu sec, %9lu ns\n", (unsigned long) uptime.tv_sec,    
+                                        uptime.tv_nsec );   
+  
+    INIT_WORK(&wq_hrtimer, wq_func_hrtimer);  
+    return 0;  
+}  
+  
+static void __exit module_hrtimer_exit( void )  
+{  
+    int ret;  
+  
+    ret = hrtimer_cancel( &hr_timer );  
+    if (ret)   
+        printk("The timer was still in use...\n");  
+  
+    printk("HR Timer module uninstalling\n");  
+    return;  
+}  
+  
+module_init(module_hrtimer_init);  
+module_exit(module_hrtimer_exit);  
+MODULE_LICENSE("GPL");
+
+
+如果在my_hrtimer_callback()里面直接返回HRTIMER_RESTART会导致立即重新进入my_hrtimer_callback()。这时shell对输入没有任何响应。
+
+所以为了解决这个问题，创建了一个work queue，由my_hrtimer_callback() enqueue这个工作队列。在work queue的处理函数里面重启hrtimer。
+
+但是这样带来的负面影响是进入hrtimer_callback和wq_func被调用之间有Linux系统调度引入的延迟，导致interval出现误差。
+
+经过实测，在ZC706缺省配置下，这个延迟大约是17.5us (hrtimer interval为5ms，每20秒计算一次interval误差)。
+
+root@zynq:~/nfs/hrtimer# insmod hrtimer.ko  
+HR Timer module installing  
+hrtimer:    2900 sec, 993366078 ns  
+hrtimer:    2900 sec, 998395278 ns, interval_delay=369966 ns  
+hrtimer:    2921 sec,  69525447 ns, interval_delay=17782 ns  
+hrtimer:    2941 sec, 139764655 ns, interval_delay=17559 ns  
+hrtimer:    2961 sec, 210029519 ns, interval_delay=17566 ns  
+hrtimer:    2981 sec, 280465631 ns, interval_delay=17609 ns  
+hrtimer:    3001 sec, 350677038 ns, interval_delay=17552 ns  
+hrtimer:    3021 sec, 420625114 ns, interval_delay=17487 ns  
+hrtimer:    3041 sec, 490744847 ns, interval_delay=17529 ns
+
