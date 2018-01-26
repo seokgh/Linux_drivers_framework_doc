@@ -1,0 +1,128 @@
+http://wiki.kldp.org/KoreanDoc/html/EmbeddedKernel-KLDP/index.html
+
+
+
+차례
+1. 리눅스 커널 컴파일하기
+1.1. 리눅스 일반
+1.1.1. 왜 리눅스인가?
+1.1.2. 리눅스 소스 디렉토리 구조
+1.2. LXR
+1.3. 소스 코드 얻기
+1.4. 소스 코드 풀기
+1.5. 컴파일 준비
+1.6. 커널 설정
+1.7. 커널 컴파일
+1.8. 커널 테스트 및 설치
+2. Makefile 분석
+2.1. 부팅 과정의 이해[1]
+2.2. 커널 이미지 파일의 구조
+2.2.1. 커널의 부팅
+2.2.2. zimage와 bzImage의 차이
+2.3. bzimage가 만들어지는 과정 추적-Makefile 분석
+2.3.1. $(topDIR)/Makefile
+2.3.2. $(topDIR)/arch/i386/Makefile
+2.3.3. $(topDIR)/arch/i386/boot/Makefile
+2.3.4. $(topDIR)/arch/i386/boot/compressed/Makefile
+2.3.5. $(topDIR)/arch/i386/boot/tools/build.c
+2.4. bzImage가 만들어지는 과정 추적-Log 분석
+2.4.1. make bzImage 순서 정리
+2.4.2. Log
+2.5. 단계별 자세한 분석
+2.5.1. -Ttext 0x0의 의미
+2.5.2. 분석
+3. 크로스 컴파일러 만들기
+3.1. 크로스?
+3.2. 툴체인
+3.2.1. 배경
+3.2.2. 미리 만들어진 툴체인
+3.2.3. 툴체인 만들기
+4. ARM 리눅스
+4.1. ARM 프로세서 MMU(Memory Management Unit)
+4.1.1. 개요
+4.1.1.1. TLB
+4.1.1.2. 메모리 접근
+4.1.1.3. 변환 테이블
+4.1.1.4. 도메인
+4.1.2. 변환 절차
+4.1.3. 변환 테이블 베이스
+4.1.4. 1레벨 읽기
+4.1.5. 1레벨 디스크립터
+4.1.6. 섹션 디스크립터와 섹션 변환
+4.1.7. 페이지 테이블 디스크립터
+4.1.8. 2레벨 디스크립터
+4.1.9. 큰 페이지 변환
+4.1.10. 작은 페이지 변환
+4.1.11. 캐시와 쓰기 버퍼 제어
+4.1.12. 접근 권한
+4.2. Assabet 보드용 커널 컴파일
+4.3. ARM 리눅스 Makefile 분석
+4.3.1. $(TOPDIR)/arch/arm/Makefile
+4.3.2. $(TOPDIR)/arch/arm/vmlinux.lds
+4.3.3. $(TOPDIR)/arch/arm/boot/compressed/vmlinux.lds
+4.3.4. Log 분석
+4.4. 소스 분석
+4.4.1. arch/arm/boot/compressed/head.S
+4.4.2. arch/arm/kernel/head-armv.S
+5. 리눅스 커널 부팅
+5.1. 커널 시작
+5.2. lock_kernel()
+5.2.1. Lock이 왜 필요하지?
+5.2.2. Lock - 기초적 설명
+5.2.3. i386, ARM의 스핀락
+5.3. setup_arch()
+5.4. trap_init()
+5.5. init_IRQ()
+5.6. sched_init()
+5.7. init()
+5.8. dmesg 정리
+6. 디바이스 드라이버
+6.1. 디바이스 번호
+6.2. 샘플 디바이스 드라이버
+6.3. 모듈 동작의 이해
+6.4. 알아야할 것 들
+A. SEGA DreamCast Linux
+A.1. LinuxSH
+A.2. 드림캐스트에서 리눅스 실행해 보기
+B. 리눅스에 시스템 콜 만들어 넣기
+B.1. 시스템 콜의 흐름
+B.2. IDT(Interrupt Descriptor Table)
+B.3. 시스템 콜 테이블
+B.4. 시스템 콜 추가
+C. Inline Assembly
+C.1. 인라인 어셈블리 기초
+C.1.1. 알아야할 것 들
+C.1.2. 어셈블리
+C.1.3. Output/Input
+C.1.3.1. Constraints
+C.1.3.2. Modifier
+C.1.3.3. ARM Family Constraints
+C.1.3.4. i386 Family Constraints
+C.2. 사례 분석
+C.2.1. strcpy()
+C.2.2. _set_gate()
+표 목록
+1-1. v2.4.16 커널 컴파일을 위한 최소 요구 사항
+4-1. 섹션 디스크립터 필드
+4-2. 페이지 디스크립터 필드
+4-3. 2레벨 디스크립터 포맷
+4-4. 2레벨 디스크립터 접근 권한
+4-5. 메모리 시스템 속성
+4-6. 캐시, 쓰기 버퍼 비트의 의미
+4-7. 접근 권한
+5-1. 예상 결과
+5-2. 가능한 결과
+그림 목록
+2-1. mbr의 구조
+2-2. bzImage의 구조
+4-1. 변환 테이블 1레벨 디스크립터 접근
+4-2. 1레벨 디스크립터 포맷
+4-3. 섹션 변환
+4-4. 2레벨 디스크립터 접근
+4-5. 2레벨 디스크립터 포맷
+4-6. 큰 페이지 변환
+4-7. 작은 페이지 변환
+4-8. SA-1110 메모리 맵
+4-9. ARM 리눅스 커널 이미지 메모리 맵
+B-1. IDT 구조
+B-2. fork()가 실행될 때의 흐름
