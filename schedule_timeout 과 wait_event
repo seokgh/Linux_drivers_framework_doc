@@ -1,0 +1,105 @@
+커널 API - schedule_timeout 과 wait_event
+
+드라이버를 짜다 보면 시간지연이나 쓰레드에서 이벤트에 의한 처리를 지속적으로 해야 할 필요성이 생깁니다.
+그럴때 자주 사용하는 함수가 schedule_timeout 과 wait_event 함수인데 이 함수의 사용에 대해서 설명합니다.
+
+
+msleep							:  schedule_timeout_uninterruptible 
+msleep_interruptible					:  schedule_timeout_interruptible 
+
+schedule_timeout						: 현재 task의 상태에 따라 다름.
+schedule_timeout_interruptible			        : task는 sleep을 합니다.  또 시그널에 의해서 깨어날수 있습니다.
+								  timeout 된후 우선순위에 따라 실행된다.
+								  즉 최소한 timeout 에 의해서 설정된 시간이상 지연된다.
+__set_current_stat(TASK_INTERRUPTIBLE);
+return schedule_timeout(timeout);
+
+schedule_timeout_uninterruptible		         : 타임아웃이 될때까지 sleep 상태를 유지합니다. 
+								  지연이 끝나면 schedule 되어 실해된다.
+__set_current_stat(TASK_UNINTERRUPTIBLE);
+return schedule_timeout(timeout);
+												  
+
+wait_event(wq, condition)				: 조건이 참이 될때까지 기다립니다.
+wait_event_timeout(wq, condition, timeout)		: 조건이 참이 되거나 타임아웃때까지 기다린다.
+wait_event_interruptible(wq, condition)		: 조건이 참이 되거나 시그널을 받을때까지 기다린다.
+wait_event_interruptible_timeout			: 조건이 참이 되거나 타임아웃될때까지 기다린다.
+
+각각은 조금씩 다른 사용예를 보입니다.
+
+msleep과 msleep_interruptible 은 각각 schedule_timeout 과 schedule_timeout_interruptible 과
+매크로 형태로 선언되어 있습니다.
+폼생폼사... 
+msleep 보다는 schedule_timeout 을 
+msleep_interruptible 보다는 schedule_timeout_interruptible 을 사용해 주세요
+어플리케이션과 마찬가지로 하드웨어적인 지연이 필요할때 사용합니다.
+
+
+이제 4가지 wait 함수를 소개합니다.
+많이 쓰이는 데가 바로 DMA 전송이나 thread 에서 전송완료나 이벤트를 기다릴때 많이 사용합니다.
+thread 에서 사용한다고 가정하고 간단한 pseudo code 를 보겠습니다.
+
+int timeout; 
+wait_queue_head_t ewaitq;
+unsigned long flags;
+
+	init_waitqueue_head(&mp4e_dev->wait_mp4eq);
+
+	daemonize("sample");
+	allow_signal(SIGKILL);
+	set_current_state(TASK_INTERRUPTIBLE);
+	
+	for(;;) {
+		timeout = wait_event_interruptible_timeout(ewaitq, test_and_clear_bit(0x01, &flags), HZ);
+		
+		while(signal_pending(current) {
+			siginfo_t info;
+			unsigned long signr;
+			
+			signr = dequeue_signal_lock(current, &current->blocked, &info);
+	
+			switch(signr) {
+				case SIGKILL:
+					printk(KERN_INFO "%s SIGKILL received.\n", __FUNCTION__);
+					goto die;
+				default:
+					printk(KERN_INFO "%s signal %ld received.\n", __FUNCTION__, signr);
+					break;
+		}
+	
+		if(0==timeout) {
+			// timeout  process
+		}
+	
+		// event type check and handle
+	}
+die:
+	complete_and_exit(NULL, 0);
+	
+	
+	위의 예가 간단한 샘플입니다.
+	설명하면 이 커널 쓰레드의 이름을 하나 주고
+	이 쓰레드는 SIGKILL 이라는 시그널을 허용합니다
+	이 시그널은 종료시에 사용됩니다.
+	또 이 task가 실행될때는 인터럽트를 허용합니다.
+	허용하지 않으면 시그널을 못받습니다.
+	
+	wait_event_interruptible_timeout 함수는 아무런 시그널이나 wait queue 에 이벤트가 없어도
+	1초마다 주기적으로 깨어나서 상태를 체크합니다.
+	리턴받은 타임아웃이 0 이 아니면 이벤트를 받은 것이므로 무언가 해야 할 것이 있다는 의미입니다.
+	
+	보통 이런 이벤트를 깨워주기 위해서 인터럽트나 타이머, 사용자 인터페이스에서 wake_up을 해줍니다.
+	if(!test_and_set_bit(0x01, &flags)) {
+		wake_up_interruptible(&ewaitq);
+	}
+	이런 식으로 사용합니다.
+	필요에 따라 wait_event 는 다르게 사용할수 있습니다.
+	
+	wait_event(ewaitq, test_and_clear_bit(0x01, &flags));
+	timeout = wait_event_timeout(ewaitq, test_and_clear_bit(0x01, &flags), HZ);
+	wait_event_interruptible(ewaitq, test_and_clear_bit(0x01, &flags));
+	timeout = wait_event_interruptible_timeout(ewaitq, test_and_clear_bit(0x01, &flags), HZ);
+	
+	위의 예에서 첫번째와 두번째 것은 호출시 TASK_UNINTERRUPTIBLE 의 조건이 자동적으로 부여됩니다.
+	따라서 밑에 따라오는 시그널 처리는 하지 않아야 합니다.
+	물론 위의 여러가지 사용들은 실제 디바이스의 특성과 조건에 따라 알맞게 사용하시면 됩니다.
