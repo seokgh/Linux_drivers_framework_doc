@@ -1,0 +1,230 @@
+
+大致是：
+1.读写请求先不执行，而是放入队列。
+2.优化后（调整顺序）再执行。
+
+块设备操作时是以扇区sector为单位的。即使是读写一个byte，它也是把整个扇区都拿出来操作的。
+
+
+举例： 假设要写 Flash 扇区0，扇区1
+
+不优化时：
+	1.读出整块到buffer
+	2.修改buffer里扇区0数据
+	3.擦除整块（由于FLASH特性上的原因，写之前要先擦除）
+	4.烧写整块
+
+	1.读出整块到buffer
+	2.修改buffer里扇区1数据
+	3.擦除整块
+	4.烧写整块
+
+优化后，变成：
+	1.读出整块到buffer
+	2.修改buffer里扇区0，1数据
+	3.擦除整块
+	4.烧写整块
+
+提高了效率。
+
+
+
+
+-----------------------------
+Block设备驱动框架/流程：
+-----------------------------
+
+app：           open，read，write   “1.txt”
+----------------------------------------------------------------------   //  App对文件的读写
+文件系统：     vFat,ext2, ext3, yaffs2, jffs2...等等各文件系统             //  在文件系统这一层：已经把对文件的读写，转换成了对扇区的读写。
+---------------------ll_rw_block(通用的入口)--------------------------   //  对扇区的读写(buffer_head-->bio-->把bio放入队列里，调用队列里的处理函数。只要写好处理队列的函数就可以了)
+                        块设备驱动程序
+----------------------------------------------------------------------
+硬件：                磁盘，eMMC, FLASH...
+
+
+
+
+ll_rw_block()所做的事情： 《Linux内核源代码情景分析》一书文件系统章有说明。ll: low level, 底层的读写。
+	1.把读写请求放入队列 
+	2.调用队列的处理函数(优化/调顺序/合并). 放入队列的过程当中也会优化。
+
+
+<文件系统>不是我关心的重点，所以就从 ll_rw_block 开始往下分析：
+
+ll_rw_block分析： /fs/buffer.c 观看fs目录，buffer.c貌似是个通用的文件。莫非buffer的意思就是表明 1.读写请求先不执行，而是放入队列...？ 有点讲究。
+void ll_rw_block(int rw, int nr, struct buffer_head *bhs[])  //rw：是read还是write。数据传输的三要素源,目的,长度放在buffer_head里。它是个数组，有多少个项呢？nr即是。
+	for (i = 0; i < nr; i++)
+		submit_bh(op, op_flags, bh);   //bh: buffer head. 提交bh。
+			struct bio *bio;       //submit_bh()用buffer_head构造bio (block input/output)。
+			submit_bio(bio);       //提交bio
+				generic_make_request(bio);	//通用的构造请求(意思就是使用bio来构造请求Request呗...)
+					__generic_make_request(bio);	  //
+						request_queue_t *q = bdev_get_queue(bdev);  //找到队列
+							ret = q->make_request_fn(q, bio);   //调用队列里面的“构造请求”的函数。make_request_fn貌似是个默认的函数(__make_request)的指针。
+								__make_request
+									elv_merge(q, &req, bio); //先尝试合并bio (elv: 电梯调度算法，既一次方向的传输过程中，尽量传输更多的人)。
+												 //在块设备驱动的优化里面，电梯调度算法经常被使用。
+									     ...
+									init_request_from_bio(req, bio);
+									add_request(q, req);     //如果合并没成功，就用bio构造一个请求,放入队列。
+
+									//执行队列： 下面是执行入口之一(有很多的执行入口...)
+									__generic_unplug_device(req)  //新内核变成了 __blk_run_queue_uncond() ?
+										//执行队列(调用队列的“处理函数”)。									
+										q->request_fn(q);
+
+										
+
+队列: request_queue_t（这队列是干什么用的？它只不过是提供了读写的能力而已。 你所用的磁盘是哪厂/容量多大/扇区多大等等的属性信息呢？）
+
+----------------------------------
+所以总结:
+----------------------------------
+怎么写Linux块设备驱动程序？
+0. 分配gendisk: alloc_disk()
+1. 设置:
+	1.1 分配/设置队列：request_queue_t  //它只不过是提供了读写的能力。队列初始化时，提供了个默认的“构造请求”的处理函数__make_request, 它就是等于blk_init_queue()时传进来的第一个参数。
+		blk_init_queue()
+	1.2 设置gendisk其他信息		   //它提供磁盘属性信息。设置磁盘容量(set_capacity())的时候，容量单位是 扇区大小/512。在内核的文件系统那一层，它认为扇区大小永远是512字节。
+2. 注册gendisk结构体: add_disk()
+
+ 
+
+
+----------------------------------------------------------------
+块设备驱动的编写
+用内存来模拟一个磁盘设备： 模拟磁盘也可以格式化，挂东西等。
+----------------------------------------------------------------
+可参考这俩文件：drivers/block/xd.c,  drivers/block/z2ram.c
+
+register_blkdev(RAMDISK_MAJOR, "ramdisk")  //比字符设备的register_chrdev少了个file_operations结构，只是给 cat /proc/devices 返回一些信息而已。
+					   //当然也是，第一个参数写0的话就给你返回一个合适的主设备号。
+
+		当然也得提供block_device_operations结构，就算里面没有任何操作函数，也得提供一个空的实体，否则出错。
+			static const struct block_device_operations carm_bd_ops = {
+				.owner		= THIS_MODULE,
+				.getgeo		= carm_bdev_getgeo,
+			};
+	
+q = blk_init_queue(carm_oob_rq_fn, &host->lock);  //初始化一个队列,并且往队列里面传入一个函数指针：request_fn
+
+接下来，队列是怎么用起来的？ 
+	分配一个gen_disk, 然后disk->queue = q;进去。 当然也会设置gen_disk的其他属性信息,主设备号，容量等等：
+
+		disk->major = host->major;
+		disk->first_minor = i * CARM_MINORS_PER_MAJOR;
+		disk->fops = &carm_bd_ops;
+		disk->private_data = port;
+
+		q = blk_init_queue(carm_rq_fn, &host->lock);
+		if (!q) {
+			rc = -ENOMEM;
+			break;
+		}
+		disk->queue = q;
+		blk_queue_max_segments(q, CARM_MAX_REQ_SG);
+		blk_queue_segment_boundary(q, CARM_SG_BOUNDARY);
+
+		q->queuedata = port;
+
+	最后再注册gen_disk：
+	add_disk(disk);
+	
+就这么简单。
+
+在入口函数里面大致：
+	/* 1. 分配一个gen_disk结构体 */
+	disk = alloc_disk(CARM_MINORS_PER_MAJOR);  //alloc_disk()参数为磁盘的分区个数+1。+1是因为多了个代表“整个磁盘”的情况。那想让这个磁盘不能分区，就写1？
+
+	/* 2. 设置 */
+	/* 2.1 分配/设置队列：提供读写能力 */
+	q = blk_init_queue(carm_rq_fn, &host->lock);  //需要2参数，队列里的处理函数(默认的“构造请求”的处理函数),和一个自旋锁。
+						      //carm_rq_fn该完成：以电梯调度算法，从队列里面拿出下一个请求，执行它：elv_next_request()...end_request();
+						      // 最起码的空的写法： 会出来 无法识别分区表 等信息
+						      //  while ((req = elv_next_request(q)) != NULL) {
+						      //      end_request(req, 1); 
+						      //  }
+	/* 2.2 设置其他属性：比如容量等 */
+	/* 3. 注册 */
+
+“构造请求”的处理函数大致内容：
+	对扇区的操作了...
+	里面可以加 static 的 read_count，wirte_count, 在读和写操作里各做++操作，并打出来看看^^。
+
+	(insmode 时read_count 会+1，格式化时wirte_count会被+到5，挂接时read_count会增加到几十，
+	做cp /etc/inittable /tmp操作时，先是read_count被++了，并没有马上进行写操作！后面等了好一会儿才进行了写操作。
+	这个现象犹如用U盘设备拷贝文件时，拷贝对话框已经提示拷贝完，但实际进行安全删除U盘时提示说U盘正在忙，U盘灯也还在狂闪...，所以U盘设备要安全删除unmount是有原因的
+	，当然执行sync系统调用命令，也会立即写进去，或进行unmount时也会立即写进去...
+	操作这个块设备时，看read_count，wirte_count输出顺序，发现它要么都是一连串的写操作，要么都是一连串的读操作，不会读写读写反复进行...所以读写操作被优化了。就像电梯调度算法...)
+
+	磁盘设备也类似，一路旋转过程中，先把所有的读操作先做完，再把所有的写操作做一遍。不会读操作/写操作反复切换，效率太低。
+	
+
+
+在出口函数里面大致：
+	unregister_blk(major, "ramblock");
+	del_gendisk(ramblock_disk);
+	put_disk(ramblock_disk);
+	blk_cleanup_queue(ramblock_queue);
+
+	kfree(xxx);
+
+
+	//参考：brd.c
+	static void __exit brd_exit(void)
+	{
+		struct brd_device *brd, *next;
+
+		list_for_each_entry_safe(brd, next, &brd_devices, brd_list)
+		brd_del_one(brd);
+
+		blk_unregister_region(MKDEV(RAMDISK_MAJOR, 0), 1UL << MINORBITS);
+		unregister_blkdev(RAMDISK_MAJOR, "ramdisk");
+
+		pr_info("brd: module unloaded\n");
+	}
+
+	module_init(brd_init);
+	module_exit(brd_exit);
+
+
+
+在命令行里 ls -l /dev/sd* 结果说明： 次设备号为0时，表示整个磁盘。次设备号1表示第一个分区，2表示是第2个分区...
+ai@ai-OptiPlex-790:~/Documents/Linux_Kernel/linux-4.15.9/drivers/block$ ls -l /dev/sd*
+	brw-rw---- 1 root disk 8, 0  3月 14 09:31 /dev/sda     //整个磁盘
+	brw-rw---- 1 root disk 8, 1  3月 14 09:31 /dev/sda1
+	brw-rw---- 1 root disk 8, 2  3月 14 09:31 /dev/sda2
+	brw-rw---- 1 root disk 8, 5  3月 14 09:31 /dev/sda5
+
+
+
+测试内存模拟的磁盘设备：
+	1.insmode .ko驱动
+	2.格式化磁盘(mkfs, mke2fs,mkdosfs...)： mkdosfs /dev/ramblock //格式化内存模拟的磁盘设备。所谓分区表就是磁盘的第一个扇区。
+		如果驱动不写完整，进行 fdisk /dev/ramblock 时，会出cylinders柱面数不详等错误信息...
+		可能现在的硬盘已经没有磁头/柱面(环)/等了，但是fdisk是老的程序，为了兼容这种老程序，驱动当中还是要提供这种假的"柱面信息"等。 
+		咋提供？在block_device_operations结构里的getgeo函数提供(geo:几何属性)，可抄袭其他getgeo函数：里面初始化掉geo->heads(面)，geo->cylinders(环), geo->sectors...等就可以了
+		(也就是提供 有多少个面，一面里有多少个扇区等信息：容量 = heads(面) x cylinders(环) x sectors(扇区) x 512 //一个扇区有512字节，这是文件系统的固定值。
+		heads，cylinders几乎可以随便写了，但是sectors就不能乱写了)。
+
+		 其他例子：
+	　	　mkfs -V -t msdos -c /dev/hda5  //在 /dev/hda5 上建一个 msdos 的档案系统， 检查是否有坏轨存在呢？
+		 mfks -t ext3 /dev/sda6         //将sda6分区格式化为ext3格式
+		 mkfs -t ext2 /dev/sda7         //将sda7分区格式化为ext2格式
+		 ...
+	3.挂接： mount /dev/ramblock /tmp/      //挂接到/tmp目录当中去。
+	4.读写文件： 进入 cd /tmp/ 目录，然后 vi 1.txt 之类，就是开始进行“磁盘操作”了...，
+	5.最后记得 cd ../, 再 unmount /tmp。
+	6.再重新挂载，并进去看里面文件还在否：   mount /dev/ramblock /tmp/， 
+					       ls /tmp， 
+					       cd ../
+                                               unmount /tmp.
+
+	比如还可以实验： 
+	cat /dev/ramblock > /mnt/ramblock.bin  //开发板上操作： 把整个磁盘映像拷贝到文件里面去
+	sudo mount -o loop ramblock.bin /mnt/  //PC上操作： 再在PC上看能否还能看到ramblock.bin文件里的内容。 -o loop 可以把一个普通文件当作一个块设备来挂接(回环设备)。
+
+以上OK的话，就证明内存模拟的假的最基本的块设备的驱动实验成功。
+
+
