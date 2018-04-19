@@ -1,0 +1,241 @@
+pcm用来描述alsa中数字音频流。 Alsa的音频的播放/录制就是通过pcm来实现的。
+
+------------------------
+名词解释
+------------------------
+声音是连续模拟量，计算机将它离散化之后用数字表示，就有了以下几个名词术语。
+
+    Frame. 帧是音频流中最小的单位，一段音频数据就是由苦干帧组成的。
+    Channel. 通道表示每帧数据中包含的通道数。单声道音频Mono含有  1个通道，立体声Stereo音频通常为2个通道。
+    Bit Depth. 位深，也叫采样精度，计算机对每个通道采样量化时数字比特位数，通常有16/24/32位。
+    Frames Per Second. 采样率表示每秒的采样帧数。常用的采样率如8KHz的人声，  44.1KHz的mp3音乐, 96Khz的蓝光音频。
+    Bits Per Second. 比特率表示每秒的比特数。
+
+上面几个量有换算关系：
+比特率=采样率×通道数×位深. 下图是8K采样率下16bits/400Hz的单声道正弦波音频。pcm数据就是图上采样点幅值的16bit表示。
+
+------------------------
+数据结构
+------------------------
+snd_pcm结构用于表征一个PCM类型的snd_device.
+
+struct snd_pcm {
+	struct snd_card *card;         /* 指向所属的card设备 */
+	int device;                    /* device number */
+	struct snd_pcm_str streams[2]; /* 播放和录制两个数据流 */
+	wait_queue_head_t open_wait;   /* 打开pcm设备时等待打开一个可获得的substream */
+}
+
+struct snd_pcm_str {
+	int stream;				      /* stream (direction) */
+	struct snd_pcm *pcm;    /* 指向所属的pcm设备 */
+	/* -- substreams -- */
+	unsigned int substream_count;         /* 个数 */
+	unsigned int substream_opened;        /* 在使用的个数 */
+	struct snd_pcm_substream *substream;  /* 指向substream单链表 */
+}
+
+文件"/proc/asound/cardX/pcmXp/info"可以查看pcm的信息。
+一个pcm设备包含 播放/录制两个流， 每个流有若干个sub stream. 一个substream只能被一个进程占用。 snd_pcm_substream才是真正实现音频的播放或录制的结构。
+
+struct snd_pcm_substream {
+	struct snd_pcm *pcm;
+	struct snd_pcm_str *pstr;
+	void *private_data;		/* copied from pcm->private_data */
+	int number;
+	char name[32];			  /* substream name */
+	int stream;			      /* stream (direction) */ /* 录制/播放 */
+	struct pm_qos_request latency_pm_qos_req;   /* pm_qos request */
+	size_t buffer_bytes_max;	                  /* limit ring buffer size */
+	struct snd_dma_buffer dma_buffer;
+	unsigned int dma_buf_id;
+	size_t dma_max;
+	
+  /* -- hardware operations -- */
+	const struct snd_pcm_ops *ops;
+	
+  /* -- runtime information -- */
+	struct snd_pcm_runtime *runtime;
+  
+  
+        /* -- timer section -- */
+	struct snd_timer *timer;		/* timer */
+	unsigned timer_running: 1;	/* time is running */
+	
+  /* -- next substream -- */
+	struct snd_pcm_substream *next;
+	
+  /* -- linked substreams -- */
+	struct list_head link_list;	/* linked list member */
+	struct snd_pcm_group self_group;	/* fake group for non linked substream (with substream lock inside) */
+	struct snd_pcm_group *group;		/* pointer to current group */
+	/* -- assigned files -- */
+	
+  void *file; /* 指向 pcm_file, 不知道有什么用？ */
+	int ref_count; /* 引用计数，打开 O_APPEND 时有用 */
+	atomic_t mmap_count;  /* mmap 的引用计数 */
+	unsigned int f_flags; /* pcm 打开的文件标记 */
+	void (*pcm_release)(struct snd_pcm_substream *);
+	struct pid *pid; /* 所在进程的pid，有多个substream时用于选择使用哪个 */
+	
+  /* misc flags */
+	unsigned int hw_opened: 1; /* 若已打开，在释放substream时需要调用close() */
+};
+
+文件"/proc/asound/cardX/pcmXp/subX/info"可以查看这个substream的信息。这 个结构里两个最重要的成员是runtime和ops.
+
+snd_pcm_ops是substream的操作方法集。  上面的层肯定又是通过次设备号 从某数组或者队列里 获取到的真正的fops的
+
+struct snd_pcm_ops {
+	int (*open)(struct snd_pcm_substream *substream); /* 必须实现 */
+	int (*close)(struct snd_pcm_substream *substream);
+	int (*ioctl)(struct snd_pcm_substream * substream,
+		     unsigned int cmd, void *arg); /* 用于实现几个特定的IOCTL1_{RESET,INFO,CHANNEL_INFO,GSTATE,FIFO_SIZE} */
+	int (*hw_params)(struct snd_pcm_substream *substream,
+			 struct snd_pcm_hw_params *params); /* 用于设定pcm参数，如采样率/位深... */
+	int (*hw_free)(struct snd_pcm_substream *substream);
+	int (*prepare)(struct snd_pcm_substream *substream); /* 读写数据前的准备 */
+	int (*trigger)(struct snd_pcm_substream *substream, int cmd); /* 触发硬件对数据的启动/停止 */
+	snd_pcm_uframes_t (*pointer)(struct snd_pcm_substream *substream); /* 查询当前的硬件指针 */
+	int (*wall_clock)(struct snd_pcm_substream *substream,
+			  struct timespec *audio_ts); /* 通过hw获得audio_tstamp */
+	int (*copy)(struct snd_pcm_substream *substream, int channel,
+		    snd_pcm_uframes_t pos,
+		    void __user *buf, snd_pcm_uframes_t count); /* 除dma外的hw自身实现的数据传输方法 */
+	int (*silence)(struct snd_pcm_substream *substream, int channel,
+		       snd_pcm_uframes_t pos, snd_pcm_uframes_t count); /* hw静音数据的填充方法 */
+	struct page *(*page)(struct snd_pcm_substream *substream,
+			     unsigned long offset); /* 硬件分配缓冲区的方法 */
+	int (*mmap)(struct snd_pcm_substream *substream, struct vm_area_struct *vma); /* */
+	int (*ack)(struct snd_pcm_substream *substream); /* 通知硬件写了一次数据 */
+};
+
+这些操作方法集由各种声卡如PCI,USB,SOC等子模块来实现。
+
+snd_pcm_runtime用于表示substream运行时状态。
+
+struct snd_pcm_runtime {
+	/* -- Status -- */ /* */
+
+	/* -- HW params -- */ /* 当前流的数据格式 */
+
+	/* -- SW params -- */ /* 用户配置的参数如pcm_config */
+
+	/* -- mmap -- */
+	struct snd_pcm_mmap_status *status; /* 当前硬件指针位置及其状态 */
+	struct snd_pcm_mmap_control *control; /* 当前的应用指针及其状态 */
+
+	/* -- locking / scheduling -- */ /* 用于通知如数据空闲/溢出等事件 */
+
+	/* -- private section -- */
+
+	/* -- hardware description -- */ /* 硬件支持的参数及参数之间的约束条件 */
+
+	/* -- interrupt callbacks -- */ /* HW一次中断传输完毕时的回调，似乎没有哪个模块用到它？ */
+	void (*transfer_ack_begin)(struct snd_pcm_substream *substream);
+	void (*transfer_ack_end)(struct snd_pcm_substream *substream);
+
+	/* -- timer -- */
+
+	/* -- DMA -- */
+
+	struct snd_dma_buffer *dma_buffer_p;	/* allocated buffer */
+}
+
+这是相当大的一个结构体，自带的注释很明晰，就不贴它的成员了。它反映了一个substream运行时的状态及实时信息。
+文件"/proc/asound/*/subX/"可以得到这个 结构的大部分信息。
+
+------------------------
+PCM的状态转换
+------------------------
+                     PCM的状态的转换图
+
+
+
+    (IOCTL_HW_PARAMS)         (IOCTL_PREPARE)
+OPEN ----------------> SETUP ----------------> PREPARE(从这里也可以通过 IOCTL_START 切到 RUNNING 状态)
+                          ↑                         ↑
+                          ↑                         ↑
+                          ↑(IOCTL_DROP)             ↑（IOCTL_PREPARE）
+                          ↑                         ↑
+                          ↑                         ↑
+                          ↑                         ↑
+                        RUNNING-------------------->XRUN
+
+
+
+除XRUN状态之后，其它的状态大多都由用户空间的ioctl()显式的切换。 以TinyAlsa的播放音频流程为例。pcm_open()的对应的流程就是：
+
+    open(pcm)后绑定一个substream，处于OPEN状态
+    ioctl(SNDRV_PCM_IOCTL_SW_PARAMS)设定参数pcm_config.配置 runtime 的sw_para.切换到SETUP状态
+
+Tinyalsa的pcm_wirte()流程：
+
+    ioctl(SNDRV_PCM_IOCTL_PREPARE)后，substream切换到PREPARE状态。
+    ioctl(SNDRV_PCM_IOCTL_WRITEI_FRAMES)后，substream切换到RUNNING状态。
+
+TinyAlsa的pcm_mmap_write()流程：
+
+    ioctl(SNDRV_PCM_IOCTL_PREPARE)后，substream切换到PREPARE状态。
+    ioctl(SNDRV_PCM_IOCTL_START)后，substream切换到RUNNING状态。
+
+TinyAlsa pcm_close流程：
+
+    ioctl(SNDRV_PCM_IOCTL_DROP)后，切换回SETUP状态。
+    close()之后，释放这个设备。
+
+XRUN状态又分有两种，在播放时，用户空间没及时写数据导致缓冲区空了，硬件没有 可用数据播放导致UNDERRUN;录制时，用户空间没有及时读取数据导致缓冲区满后溢出， 硬件录制的数据没有空闲缓冲可写导致OVERRUN.
+缓冲区的管理
+
+音频的缓冲区是典型的只有一个读者和一个写者的FIFO结构。 下图是ALSA中FIFO缓冲区的示意图。
+
+pcm_fifo
+
+上图以播放时的缓冲管理为例，runtime->boundary一般都是较大的数，ALSA中默认接近LONG_MAX/2.这样FIFO的出队入队指针不是真实的缓冲区的地址偏移，经过转换才得到 物理缓冲的偏移。这样做的好处是简化了缓冲区的管理，只有在更新hw指针的时候才需 要换算到hw_ofs.
+
+当用户空间由于系统繁忙等原因，导致hw_ptr>appl_ptr时，缓冲区已空，内核这里有两种方案：
+
+    停止DMA传输，进入XRUN状态。这是内核默认的处理方法。
+    继续播放缓冲区的重复的音频数据或静音数据。
+
+用户空间配置stop_threshold可选择方案1或方案2,配置silence_threshold选择继 续播放的原有的音频数据还是静意数据了。个人经验，偶尔的系统繁忙导致的这种状态， 重复播放原有的音频数据会显得更平滑，效果更好。
+实现
+
+pcm的代码让人难以理解的部分莫过于硬件指针的更新snd_pcm_update_hw_ptr0(),分 析见这里。它是将hw_ofs转换成FIFO中hw_ptr的过程，同时处理环形缓冲区的回绕，没有中断，中断丢失等情况。
+
+还有一处就是处理根据硬件参数的约束条件得到参数的代码snd_pcm_hw_refine(substream, params). 留待以后分析吧。
+调试
+
+"sound/core/info.c"是alsa为proc实现的接口。这也是用户空间来调试内核alsa最主要的方法了。
+打开内核配置选项CONFIG_SND_VERBOSE_PROCFS/CONFIG_SND_PCM_XRUN_DEBUG，可看到以下的目录树。
+
+/proc/asound/
+|-- card0
+|   |-- id  声卡名
+|   |-- pcm0c
+|   |   |-- info pcm设备信息
+|   |   |-- sub0
+|   |   |   |-- hw_params 硬件配置参数
+|   |   |   |-- info substream设备信息
+|   |   |   |-- status 实时的hw_ptr/appl_ptr
+|   |   |   `-- sw_params  软件配置参数
+|   |   `-- xrun_debug  控制内核alsa的调试日志输出
+|   `-- pcm0p
+|-- cards 内核拥有的声卡
+|-- devices 内核所有的snd_device设备
+|-- pcm 所有的pcm设备
+`-- version alsa的版本号
+
+在ALSA播放/录制异常时，若打开xrun_debug，内核日志会实时打印更多有用的信息， 往"/proc/asound/card0/pcm0p/xrun_debug"写入相应的掩码就好了。
+
+#define XRUN_DEBUG_BASIC	(1<<0)
+#define XRUN_DEBUG_STACK	(1<<1)	/* dump also stack */
+#define XRUN_DEBUG_JIFFIESCHECK	(1<<2)	/* do jiffies check */
+#define XRUN_DEBUG_PERIODUPDATE	(1<<3)	/* full period update info */
+#define XRUN_DEBUG_HWPTRUPDATE	(1<<4)	/* full hwptr update info */
+#define XRUN_DEBUG_LOG		(1<<5)	/* show last 10 positions on err */
+#define XRUN_DEBUG_LOGONCE	(1<<6)	/* do above only once */
+
+相当冗长的一篇总结。
+与其它内核模块比起来，这部分代码似乎显得更“晦涩”， 
+原因 之一可能就是音频流是实时的数据， 而内核本身不是实时的系统，软件上不能很好的保证hw_ptr和appl_ptr的同步。
