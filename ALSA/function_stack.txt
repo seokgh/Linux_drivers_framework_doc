@@ -293,4 +293,236 @@ snd_pcm_f_ops是一个标准的文件系统file_operations结构数组,它的定
             
 
 
-   
+------------------------------------------------------------------------------------------
+Control Interface
+------------------------------------------------------------------------------------------
+Control接口主要让用户空间的应用程序(alsa-lib)可以访问和控制音频codec芯片中的多路开关,滑动控件等.
+对于Mixer(混音)来说,Control接口显得尤为重要,从ALSA 0.9.x版本开始,所有的mixer工作都是通过control接口的API来实现的.
+
+ALSA已经为AC97定义了完整的控制接口模型,如果你的Codec芯片只支持AC97接口,可以忽略这部分内容。
+
+
+Controls的定义：
+    要自定义一个Control,首先要定义3回调函数: info, get, put. 然后定义一个 snd_kcontrol_new 结构:
+    
+                static struct   snd_kcontrol_new     my_control  = {
+                .iface = SNDRV_CTL_ELEM_IFACE_MIXER,
+                .name = "PCM Playback Switch",
+                .index = 0,
+                .access = SNDRV_CTL_ELEM_ACCESS_READWRITE,
+                .private_value = 0xffff,
+                .info = my_control_info,        //
+                .get = my_control_get,          //
+                .put = my_control_put           //
+            };
+            
+            
+            iface字段指出了control的类型,alsa定义了几种类型(SNDDRV_CTL_ELEM_IFACE_XXX),常用的类型是MIXER,
+                当然也可以定义属于全局的CARD类型,也可以定义属于某类设备的类型,例如HWDEP,PCMRAWMIDI,TIMER等,
+                这时需要在device和subdevice字段中指出卡的设备逻辑编号.
+
+            name字段是该control的名字,从ALSA 0.9.x开始,control的名字是变得比较重要,因为control的作用是按名字来归类的.
+            ALSA已经预定义了一些control的名字,我们再Control Name一节详细讨论.
+
+            index字段用于保存该control的在该卡中的编号.如果声卡中有不止一个codec,每个codec中有相同名字的control,
+            这时我们可以通过index来区分这些controls.当index为0时,则可以忽略这种区分策略.
+
+            access字段包含了该control的访问类型.每一个bit代表一种访问类型,这些访问类型可以多个“或”运算组合在一起.
+
+            private_value字段包含了一个任意的长整数类型值.该值可以通过info,get,put这几个回调函数访问.
+            你可以自己决定如何使用该字段,例如可以把它拆分成多个位域,又或者是一个指针,指向某一个数据结构.
+
+            tlv字段为该control提供元数据.
+            
+            
+            
+Control的名字:
+
+control的名字需要遵循一些标准,通常可以分成3部分来定义control的名字:  源--方向--功能.
+
+    源　　可以理解为该control的输入端,alsa已经预定义了一些常用的源,例如：Master,PCM,CD,Line等等. 
+    方向　代表该control的数据流向,例如：Playback,Capture,Bypass,Bypass Capture等等,也可以不定义方向,
+                    这时表示该Control是双向的(playback和capture).
+    功能　根据control的功能,可以是以下字符串：Switch,Volume,Route等等
+
+ 也有一些命名上的特例:
+
+    全局的capture和playback    "Capture Source","Capture Volume","Capture Switch",它们用于全局的capture source,switch和volume.
+    同理,"Playback Volume","Playback Switch",它们用于全局的输出switch和volume.
+    
+    Tone-controles    音调控制的开关和音量命名为:Tone Control - XXX,例如,"Tone Control - Switch","Tone Control - Bass","Tone Control - Center".
+    3D controls    3D控件的命名规则:,"3D Control - Switch","3D Control - Center","3D Control - Space".
+    Mic boost    麦克风音量加强控件命名为:"Mic Boost"或"Mic Boost(6dB)".
+
+
+
+访问标志(ACCESS Flags):
+Access字段是一个bitmask,它保存了改control的访问类型.默认的访问类型是:SNDDRV_CTL_ELEM_ACCESS_READWRITE,表明该control支持读和写操作.如果access字段没有定义(.access==0),此时也认为是READWRITE类型.
+
+如果是一个只读control,access应该设置为:SNDDRV_CTL_ELEM_ACCESS_READ,这时,我们不必定义put回调函数.类似地,如果是只写control,access应该设置为:SNDDRV_CTL_ELEM_ACCESS_WRITE,这时,我们不必定义get回调函数.
+
+如果control的值会频繁地改变(例如:电平表),我们可以使用VOLATILE类型,这意味着该control会在没有通知的情况下改变,应用程序应该定时地查询该control的值.
+回调函数
+
+
+info回调函数:
+info回调函数用于获取control的详细信息.它的主要工作就是填充通过参数传入的snd_ctl_elem_info对象,以下例子是一个具有单个元素的boolean型control的info回调:
+
+1 static int snd_myctl_mono_info(struct snd_kcontrol *kcontrol,
+2     struct snd_ctl_elem_info *uinfo)
+3 {
+4     uinfo->type = SNDRV_CTL_ELEM_TYPE_BOOLEAN;
+5     uinfo->count = 1;
+6     uinfo->value.integer.min = 0;
+7     uinfo->value.integer.max = 1;
+8     return 0;
+9 }
+
+type字段指出该control的值类型,值类型可以是BOOLEAN, INTEGER, ENUMERATED, BYTES,IEC958和INTEGER64之一.count字段指出了改control中包含有多少个元素单元,比如,立体声的音量control左右两个声道的音量值,它的count字段等于2.value字段是一个联合体(union),value的内容和control的类型有关.其中,boolean和integer类型是相同的.
+
+ENUMERATED类型有些特殊.它的value需要设定一个字符串和字符串的索引,请看以下例子:
+
+ 1 static int snd_myctl_enum_info(struct snd_kcontrol *kcontrol,
+ 2 struct snd_ctl_elem_info *uinfo)
+ 3 {
+ 4     static char *texts[4] = {
+ 5         "First", "Second", "Third", "Fourth"
+ 6     };
+ 7     uinfo->type = SNDRV_CTL_ELEM_TYPE_ENUMERATED;
+ 8     uinfo->count = 1;
+ 9     uinfo->value.enumerated.items = 4;
+10     if (uinfo->value.enumerated.item > 3)
+11         uinfo->value.enumerated.item = 3;
+12     strcpy(uinfo->value.enumerated.name,
+13         texts[uinfo->value.enumerated.item]);
+14     return 0;
+15 }
+
+alsa已经为我们实现了一些通用的info回调函数,例如:snd_ctl_boolean_mono_info(),snd_ctl_boolean_stereo_info()等等.
+
+
+get回调函数:
+该回调函数用于读取control的当前值,并返回给用户空间的应用程序.
+
+1 static int snd_myctl_get(struct snd_kcontrol *kcontrol,
+2     struct snd_ctl_elem_value *ucontrol)
+3 {
+4     struct mychip *chip = snd_kcontrol_chip(kcontrol);
+5     ucontrol->value.integer.value[0] = get_some_value(chip);
+6     return 0;
+7 }
+
+value字段的赋值依赖于control的类型(如同info回调).很多声卡的驱动利用它存储硬件寄存器的地址、bit-shift和bit-mask,这时,private_value字段可以按以下例子进行设置:
+
+1 private_value = reg | (shift << 16) | (mask << 24);
+
+然后,get回调函数可以这样实现:
+
+ 1 static int snd_sbmixer_get_single(struct snd_kcontrol *kcontrol,
+ 2     struct snd_ctl_elem_value *ucontrol)
+ 3 
+ 4 {
+ 5     int reg = kcontrol->private_value & 0xff;
+ 6     int shift = (kcontrol->private_value >> 16) & 0xff;
+ 7     int mask = (kcontrol->private_value >> 24) & 0xff;
+ 8     ....
+ 9 
+10     //根据以上的值读取相应寄存器的值并填入value中
+11 }
+
+如果control的count字段大于1,表示control有多个元素单元,get回调函数也应该为value填充多个数值 
+
+
+put回调函数:
+put回调函数用于把应用程序的控制值设置到control中.
+
+ 1 static int snd_myctl_put(struct snd_kcontrol *kcontrol,
+ 2     struct snd_ctl_elem_value *ucontrol)
+ 3 {
+ 4     struct mychip *chip = snd_kcontrol_chip(kcontrol);
+ 5     int changed = 0;
+ 6     if (chip->current_value !=
+ 7         ucontrol->value.integer.value[0]) {
+ 8         change_current_value(chip,
+ 9         ucontrol->value.integer.value[0]);
+10         changed = 1;
+11     }
+12     return changed;
+13 }
+
+如上述例子所示,当control的值被改变时,put回调必须要返回1,如果值没有被改变,则返回0.如果发生了错误,则返回一个负数的错误号.
+
+和get回调一样,当control的count大于1时,put回调也要处理多个control中的元素值.
+创建Controls
+
+当把以上讨论的内容都准备好了以后,我们就可以创建我们自己的control了.alsa-driver为我们提供了两个用于创建control的API:
+
+    snd_ctl_new1()
+    snd_ctl_add()
+
+可以用以下最简单的方式创建control:
+    1 err = snd_ctl_add(card, snd_ctl_new1(&my_control, chip));
+    2 if (err < 0)
+    3     return err;
+
+在这里,my_control是一个之前定义好的snd_kcontrol_new对象,chip对象将会被赋值在kcontrol->private_data字段,该字段可以在回调函数中访问.
+
+snd_ctl_new1()会分配一个新的snd_kcontrol实例,并把my_control中相应的值复制到该实例中,所以,在定义my_control时,通常我们可以加上__devinitdata前缀.snd_ctl_add则把该control绑定到声卡对象card当中.
+元数据(Metadata)
+
+很多mixer control需要提供以dB为单位的信息,我们可以使用DECLARE_TLV_xxx宏来定义一些包含这种信息的变量,然后把control的tlv.p字段指向这些变量,
+最后,在access字段中加上SNDRV_CTL_ELEM_ACCESS_TLV_READ标志,就像这样:
+
+ 1 static DECLARE_TLV_DB_SCALE(db_scale_my_control, -4050, 150, 0);
+ 2 
+ 3 
+ 4 static struct snd_kcontrol_new my_control __devinitdata = {
+ 5     ...
+ 6     .access = SNDRV_CTL_ELEM_ACCESS_READWRITE |
+ 7             SNDRV_CTL_ELEM_ACCESS_TLV_READ,
+ 8     ...
+ 9     .tlv.p = db_scale_my_control,
+10 };
+
+DECLARE_TLV_DB_SCALE宏定义的mixer control,它所代表的值按一个固定的dB值的步长变化.该宏的第一个参数是要定义变量的名字,第二个参数是最小值,以0.01dB为单位.第三个参数是变化的步长,也是以0.01dB为单位.如果该control处于最小值时会做出mute时,需要把第四个参数设为1.
+
+DECLARE_TLV_DB_LINEAR宏定义的mixer control,它的输出随值的变化而线性变化. 该宏的第一个参数是要定义变量的名字,第二个参数是最小值,以0.01dB为单位.第二个参数是最大值,以0.01dB为单位.如果该control处于最小值时会做出mute时,需要把第二个参数设为TLV_DB_GAIN_MUTE.
+
+这两个宏实际上就是定义一个整形数组,所谓tlv,就是Type-Lenght-Value的意思,数组的第0各元素代表数据的类型,第1个元素代表数据的长度,第三个元素和之后的元素保存该变量的数据.
+
+
+
+Control设备的建立:
+Control设备和PCM设备一样,都属于声卡下的逻辑设备.用户空间的应用程序通过alsa-lib访问该Control设备,读取或控制control的控制状态,从而达到控制音频Codec进行各种Mixer等控制操作.
+
+Control设备的创建过程大体上和PCM设备的创建过程相同.详细的创建过程可以参考本博的另一篇文章:Linux音频驱动之三:PCM设备的创建.下面我们只讨论有区别的地方.
+
+我们需要在我们的驱动程序初始化时主动调用snd_pcm_new()函数创建pcm设备,而control设备则在snd_card_create()内被创建,snd_card_create()通过调用snd_ctl_create()函数创建control设备节点.所以我们无需显式地创建control设备,只要建立声卡,control设备被自动地创建.
+
+和pcm设备一样,control设备的名字遵循一定的规则:controlCxx,这里的xx代表声卡的编号.我们也可以通过代码正是这一点,下面的是snd_ctl_dev_register()函数的
+
+ 1 /*
+ 2  * registration of the control device
+ 3  */
+ 4 static int snd_ctl_dev_register(struct snd_device *device)
+ 5 {
+ 6     struct snd_card *card = device->device_data;
+ 7     int err, cardnum;
+ 8     char name[16];
+ 9 
+10     if (snd_BUG_ON(!card))
+11         return -ENXIO;
+12     cardnum = card->number;
+13     if (snd_BUG_ON(cardnum < 0 || cardnum >= SNDRV_CARDS))
+14         return -ENXIO;
+15         /* control设备的名字 */
+16     sprintf(name, "controlC%i", cardnum);
+17     if ((err = snd_register_device(SNDRV_DEVICE_TYPE_CONTROL, card, -1,
+18                        &snd_ctl_f_ops, card, name)) < 0)
+19         return err;
+20     return 0;
+21 }
+
+snd_ctl_dev_register()函数会在snd_card_register()中,即声卡的注册阶段被调用.注册完成后,control设备的相关信息被保存在snd_minors[]数组中,用control设备的此设备号作索引,即可在snd_minors[]数组中找出相关的信息
+
+用户程序需要打开control设备时,驱动程序通过snd_minors[]全局数组和此设备号,可以获得snd_ctl_f_ops结构中的各个回调函数,然后通过这些回调函数访问control中的信息和数据(最终会调用control的几个回调函数get,put,info).
