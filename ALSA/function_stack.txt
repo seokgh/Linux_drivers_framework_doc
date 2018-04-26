@@ -1,0 +1,109 @@
+1. struct snd_card
+    
+1.1 snd_card是什么
+
+snd_card可以说是整个ALSA音频驱动最顶层的一个结构,
+整个声卡的软件逻辑结构开始于该结构,几乎所有与声音相关的逻辑设备都是在snd_card的管理之下,声卡驱动的第一个动作，通常就是创建一个snd_card结构体。
+
+    struct list_head devices     记录该声卡下所有逻辑设备的链表
+    struct list_head controls    记录该声卡下所有的控制单元的链表
+    void *private_data            声卡的私有数据,可以在创建声卡时通过参数指定数据的大小
+
+
+2. 声卡的建立流程
+2.1 创建snd_card的一个实例
+
+
+1 struct snd_card *card;
+2 int err;
+3 ....
+4 err = snd_card_create(index, id, THIS_MODULE, 0, &card);
+
+    index           一个整数值,该声卡的编号
+    id                字符串,声卡的标识符
+    第四个参数    该参数决定在创建snd_card实例时,需要同时额外分配的私有数据的大小,该数据的指针最终会赋值给snd_card的private_data数据成员
+    card             返回所创建的snd_card实例的指针
+
+
+2.2 创建声卡的芯片专用数据
+声卡的专用数据主要用于存放该声卡的一些资源信息,例如中断资源、io资源、dma资源等.可以有两种创建方法:
+
+    通过上一步中snd_card_create()中的第四个参数,让snd_card_create自己创建
+    or
+    自己创建: ...
+   
+2.3 设置Driver的ID和名字
+
+    1 strcpy(card->driver, "My Chip");
+    2 strcpy(card->shortname, "My Own Chip 123");
+    3 sprintf(card->longname, "%s at 0x%lx irq %i", card->shortname, chip->ioport, chip->irq);
+
+    snd_card的driver字段保存着芯片的ID字符串,user空间的alsa-lib会使用到该字符串,所以必须要保证该ID的唯一性.
+    shortname字段更多地用于打印信息,
+    longname字段则会出现在/proc/asound/cards中.
+    
+    
+2.4 创建声卡的功能部件(逻辑设备),例如PCM,Mixer,MIDI等
+这时候可以创建声卡的各种功能部件了,还记得开头的snd_card结构体的devices字段吗?每一种部件的创建最终会调用snd_device_new()来生成一个snd_device实例,并把该实例链接到snd_card的devices链表中.
+
+通常,alsa-driver的已经提供了一些常用的部件的创建函数,而不必直接调用snd_device_new(),如下:
+
+    PCM  ----   snd_pcm_new()
+    RAWMIDI --  snd_rawmidi_new()
+    CONTROL --  snd_ctl_create()
+    TIMER   --  snd_timer_new()
+    INFO    --  snd_card_proc_new()
+    JACK    --  snd_jack_new()
+
+2.5 注册声卡
+
+1 err = snd_card_register(card);
+2 if (err < 0) {
+3     snd_card_free(card);
+4     return err;
+5 }
+
+
+
+
+--------------------------------------------------------------------------------------------------------------
+总结
+--------------------------------------------------------------------------------------------------------------
+snd_card_create()
+        snd_pcm_new()
+              snd_pcm_new_stream(playback)
+              snd_pcm_new_stream(capture)
+              snd_device_new(SNDRV_DEV_PCM, &ops)
+     
+snd_pcm_set_ops(&my_pcm_ops)
+
+snd_card_register()
+        snd_device_register_all()
+              snd_pcm_dev_register()
+     
+     
+     
+
+snd_card_create　　由于pcm是声卡下的一个设备(部件),所以第一步是要先创建一个声卡。
+                  snd_pcm_new　　    调用该api创建一个pcm,才该api中会做以下事情
+                                        如果有,建立playback stream,相应的substream也同时建立
+                                        如果有,建立capture stream,相应的substream也同时建立
+                                        调用snd_device_new()把该pcm挂到声卡中,参数ops中的dev_register字段指向了函数snd_pcm_dev_register,
+                                        这个回调函数会在声卡的注册阶段被call.
+snd_pcm_set_ops　　设置操作该pcm的控制/操作接口函数,参数中的snd_pcm_ops结构中的函数通常就是我们驱动要实现的函数
+snd_card_register　注册声卡,在这个阶段会遍历声卡下的所有逻辑设备（devices list）,并且调用各设备的注册回调函数,
+                   对于pcm,就是第二步提到的snd_pcm_dev_register函数,该回调函数就建立上了和用户空间应用程序(alsa-lib)通信所用的设备文件节点:
+                   /dev/snd/pcmCxxDxxp 和 /dev/snd/pcmCxxDxxc
+
+
+
+--------------------------------------------------------------------------------------------------------------
+详细
+--------------------------------------------------------------------------------------------------------------
+snd_pcm是挂在snd_card下面的一个snd_device
+snd_pcm中的字段:streams[2],该数组中的两个元素指向两个snd_pcm_str结构,分别代表playback stream和capture stream
+snd_pcm_str中的substream字段,指向snd_pcm_substream结构，
+
+snd_pcm_substream是pcm中间层的核心,绝大部分任务都是在substream中处理,
+尤其是他的ops(snd_pcm_ops)字段,许多user空间的应用程序通过alsa-lib对驱动程序的请求都是由该结构中的函数处理.
+snd_pcm_substream的runtime字段则指向snd_pcm_runtime结构,snd_pcm_runtime记录着substream的一些重要的软件和硬件运行环境和参数.
