@@ -48,24 +48,6 @@ snd_card可以说是整个ALSA音频驱动最顶层的一个结构,
 
 通常,alsa-driver的已经提供了一些常用的部件的创建函数,而不必直接调用snd_device_new(),如下:
 
-    PCM  ----   snd_pcm_new()
-    RAWMIDI --  snd_rawmidi_new()
-    CONTROL --  snd_ctl_create()
-    TIMER   --  snd_timer_new()
-    INFO    --  snd_card_proc_new()
-    JACK    --  snd_jack_new()
-
-2.5 注册声卡
-
-1 err = snd_card_register(card);
-2 if (err < 0) {
-3     snd_card_free(card);
-4     return err;
-5 }
-
-
-
-
 --------------------------------------------------------------------------------------------------------------
 总结
 --------------------------------------------------------------------------------------------------------------
@@ -98,8 +80,21 @@ snd_card_register　注册声卡,在这个阶段会遍历声卡下的所有逻�
 
 
 --------------------------------------------------------------------------------------------------------------
-详细
---------------------------------------------------------------------------------------------------------------
+PCM
+-------------------------------------------------------------------------------------------------------------
+PCM是英文Pulse-code modulation的缩写,中文译名是脉冲编码调制.
+人耳听到的声音是模拟信号,PCM就是要把声音从模拟转换成数字信号的一种技术,
+他的原理简单地说就是利用一个固定的频率对模拟信号进行采样,采样后的信号在波形上看就像一串连续的幅值不一的脉冲,把这些脉冲的幅值按一定的精度进行量化,
+这些量化后的数值被连续地输出、传输、处理或记录到存储介质中,所有这些组成了数字音频的产生过程.
+
+PCM信号的两个重要指标是采样频率和量化精度,目前,CD音频的采样频率通常为44100Hz,量化精度是16bit.通常,播放音乐时,
+应用程序从存储介质中读取音频数据(MP3、WMA、AAC......),经过解码后,最终送到音频驱动程序中的就是PCM数据,
+反过来,在录音时,音频驱动不停地把采样所得的PCM数据送回给应用程序,由应用程序完成压缩、存储等任务.所以,音频驱动的两大核心任务就是:
+
+    playback    如何把用户空间的应用程序发过来的PCM数据,转化为人耳可以辨别的模拟音频
+    capture     把mic拾取到得模拟信号,经过采样、量化,转换为PCM信号送回给用户空间的应用程序
+
+
 snd_pcm是挂在snd_card下面的一个snd_device
 snd_pcm中的字段:streams[2],该数组中的两个元素指向两个snd_pcm_str结构,分别代表playback stream和capture stream
 snd_pcm_str中的substream字段,指向snd_pcm_substream结构，
@@ -107,3 +102,195 @@ snd_pcm_str中的substream字段,指向snd_pcm_substream结构，
 snd_pcm_substream是pcm中间层的核心,绝大部分任务都是在substream中处理,
 尤其是他的ops(snd_pcm_ops)字段,许多user空间的应用程序通过alsa-lib对驱动程序的请求都是由该结构中的函数处理.
 snd_pcm_substream的runtime字段则指向snd_pcm_runtime结构,snd_pcm_runtime记录着substream的一些重要的软件和硬件运行环境和参数.
+
+/////////////////////////////////////////////
+[设备文件节点的建立] (dev/snd/pcmCxDxp、pcmCxDxc)
+/////////////////////////////////////////////
+1. struct snd_minor
+结构体保存了声卡下某个逻辑设备的上下文信息,他在逻辑设备建立阶段被填充,在逻辑设备被使用时就可以从该结构体中得到相应的信息.pcm设备也不例外,也需要使用该结构体:
+                1 struct snd_minor {
+                2     int type;            /* SNDRV_DEVICE_TYPE_XXX */
+                3     int card;            /* card number */
+                4     int device;          /* device number */
+                5     const struct file_operations *f_ops;    /* file operations */
+                6     void *private_data;        /* private data for f_ops->open */
+                7     struct device *dev;        /* device for sysfs */
+                8 };
+
+在sound/sound.c中定义了一个snd_minor指针的全局数组:    static struct snd_minor *snd_minors[256];
+    前面说过,在声卡的注册阶段(snd_card_register),会调用pcm的回调函数snd_pcm_dev_register(),这个函数里会调用
+    函数snd_register_device_for_dev():
+    
+           static int snd_pcm_dev_register(struct snd_device *device)
+         2 {
+         3     ......
+         4 
+         5     /* register pcm */
+         6     err = snd_register_device_for_dev(devtype, pcm->card,
+         7                          pcm->device,
+         8                     &snd_pcm_f_ops[cidx],
+         9                     pcm, str, dev);
+        10     ......
+        11 }
+    
+        再进入snd_register_device_for_dev():
+                 ....
+                 struct snd_minor *preg;
+                 preg = kmalloc(sizeof *preg, GFP_KERNEL);
+                 ....
+                 snd_minors[minor] = preg;
+                 preg->dev = device_create(sound_class, device, MKDEV(major, minor), private_data, "%s", name);
+     
+     
+1. struct snd_minor 总结：           
+         
+    首先,分配并初始化一个snd_minor结构中的各字段
+        type: SNDRV_DEVICE_TYPE_PCM_PLAYBACK/SNDRV_DEVICE_TYPE_PCM_CAPTURE
+        card: card的编号
+        device: pcm实例的编号，大多数情况为0
+        f_ops: snd_pcm_f_ops
+        private_data: 指向该pcm的实例
+    根据type,card和pcm的编号,确定数组的索引值minor,minor也作为pcm设备的此设备号
+    把该snd_minor结构的地址放入全局数组snd_minors[minor]中
+    最后,调用device_create创建设备节点
+
+ 在struct snd_minor的最后,设备文件已经建立,不过它是重点在于snd_minors数组的赋值过程,
+ 
+ 
+ 下面把重点放在设备文件中：  
+        回到pcm的回调函数snd_pcm_dev_register()中:
+        static int snd_pcm_dev_register(struct snd_device *device)
+        {
+            int cidx, err;
+            char str[16];
+            struct snd_pcm *pcm;
+            struct device *dev;
+
+            pcm = device->device_data;
+                 ......
+            for (cidx = 0; cidx < 2; cidx++) {
+                          ......
+                switch (cidx) {
+                case SNDRV_PCM_STREAM_PLAYBACK:
+                    sprintf(str, "pcmC%iD%ip", pcm->card->number, pcm->device);
+                    devtype = SNDRV_DEVICE_TYPE_PCM_PLAYBACK;
+                    break;
+                case SNDRV_PCM_STREAM_CAPTURE:
+                    sprintf(str, "pcmC%iD%ic", pcm->card->number, pcm->device);
+                    devtype = SNDRV_DEVICE_TYPE_PCM_CAPTURE;
+                    break;
+                }
+                /* device pointer to use, pcm->dev takes precedence if
+                 * it is assigned, otherwise fall back to card's device
+                 * if possible */
+                dev = pcm->dev;
+                if (!dev)
+                    dev = snd_card_get_device_link(pcm->card);
+                /* register pcm */
+                err = snd_register_device_for_dev(devtype, pcm->card,
+                                  pcm->device,
+                                  &snd_pcm_f_ops[cidx],
+                                  pcm, str, dev);
+                          ......
+            }
+                 ......
+        }
+        
+ 可以看出,对于一个pcm设备,可以生成两个设备文件,一个用于playback,一个用于capture,代码中也确定了他们的命名规则:
+
+    playback  --  pcmCxDxp,通常系统中只有一各声卡和一个pcm,它就是pcmC0D0p
+    capture  --  pcmCxDxc,通常系统中只有一各声卡和一个pcm,它就是pcmC0D0c
+
+snd_pcm_f_ops
+
+snd_pcm_f_ops是一个标准的文件系统file_operations结构数组,它的定义在sound/core/pcm_native.c中:      
+
+            const struct file_operations snd_pcm_f_ops[2] = {
+                {
+                    .owner =        THIS_MODULE,
+                    .write =        snd_pcm_write,
+                    .aio_write =        snd_pcm_aio_write,
+                    .open =            snd_pcm_playback_open,
+                    .release =        snd_pcm_release,
+                    .llseek =        no_llseek,
+                    .poll =            snd_pcm_playback_poll,
+                    .unlocked_ioctl =    snd_pcm_playback_ioctl,
+                    .compat_ioctl =     snd_pcm_ioctl_compat,
+                    .mmap =            snd_pcm_mmap,
+                    .fasync =        snd_pcm_fasync,
+                    .get_unmapped_area =    snd_pcm_get_unmapped_area,
+                },
+                {
+                    .owner =        THIS_MODULE,
+                    .read =            snd_pcm_read,
+                    .aio_read =        snd_pcm_aio_read,
+                    .open =            snd_pcm_capture_open,
+                    .release =        snd_pcm_release,
+                    .llseek =        no_llseek,
+                    .poll =            snd_pcm_capture_poll,
+                    .unlocked_ioctl =    snd_pcm_capture_ioctl,
+                    .compat_ioctl =     snd_pcm_ioctl_compat,
+                    .mmap =            snd_pcm_mmap,
+                    .fasync =        snd_pcm_fasync,
+                    .get_unmapped_area =    snd_pcm_get_unmapped_area,
+                }
+            };
+            
+            snd_pcm_f_ops作为snd_register_device_for_dev的参数被传入,并被记录在snd_minors[minor]中的字段f_ops中.
+            最后,在snd_register_device_for_dev中创建设备节点:
+             snd_minors[minor] = preg;
+             preg->dev = device_create(sound_class, device, MKDEV(major, minor), private_data, "%s", name);
+
+   创建节点之后,就能在/dev目录下查看到相应的设备文件.
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   ---------------------------------------------------------------------------------------
+   从应用程序到驱动层pcm  (字符设备驱动的 老流成了)
+   ---------------------------------------------------------------------------------------
+   在sound/core/sound.c中有alsa_sound_init()函数,定义如下: 
+   
+           static int __init alsa_sound_init(void)
+            {
+                snd_major = major;
+                snd_ecards_limit = cards_limit;
+                if (register_chrdev(major, "alsa", &snd_fops)) {
+                    snd_printk(KERN_ERR "unable to register native major device number %d/n", major);
+                    return -EIO;
+                }
+                if (snd_info_init() < 0) {
+                    unregister_chrdev(major, "alsa");
+                    return -ENOMEM;
+                }
+                snd_info_minor_register();
+                return 0;
+            }
+   register_chrdev中的参数major与之前创建pcm设备是device_create时的major是同一个,这样的结果是,当应用程序open设备文件/dev/snd/pcmCxDxp时,会进入snd_fops的open回调函数,我们将在下一节中讲述open的过程.
+   
+   
+   
+   
+   
+打开pcm设备:
+   open一个pcm设备时,将会调用snd_fops的open回调函数,我们先看看snd_fops的定义:
+
+            1 static const struct file_operations snd_fops =
+            2 {
+            3     .owner =    THIS_MODULE,
+            4     .open =        snd_open
+            5 };
+            它首先从inode中取出此设备号,然后以次设备号为索引,从snd_minors全局数组中取出当初注册pcm设备时填充的snd_minor结构
+            (上面的 struct snd_minor内容),
+            然后从snd_minor结构中取出pcm设备的f_ops,并且把file->f_op替换为pcm设备的f_ops,紧接着直接调用pcm设备的f_ops->open(),
+            然后返回.
+            因为file->f_op已经被替换,以后,应用程序的所有read/write/ioctl调用都会进入pcm设备自己的回调函数中,也就是[设备文件的建立]提到的snd_pcm_f_ops结构中定义的回调.
+            
+
+
+   
