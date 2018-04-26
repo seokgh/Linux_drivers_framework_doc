@@ -1,0 +1,221 @@
+ASoC被分为Machine、 Platform、 Codec驱动三大部分,
+
+其中的Machine驱动负责Platform和Codec之间的耦合以及部分和设备或板子特定的代码,
+
+引用:  Machine驱动负责处理机器特有的一些控件和音频事件(例如,当播放音频时,需要先行打开一个放大器)；
+      单独的Platform和Codec驱动是不能工作的,它必须由Machine驱动把它们结合在一起才能完成整个设备的音频处理工作.
+
+---------------------------------------------------------------------------------------------------
+ASoC的一切都从Machine驱动开始,
+        包括声卡的注册,绑定Platform和Codec驱动等等,下面就让我们从Machine驱动开始讨论.
+---------------------------------------------------------------------------------------------------
+
+ASoC把声卡注册为Platform Device：
+-------------------------------------------------------------------------
+1. 注册Platform Device, Macihne驱动第1步开始了
+-------------------------------------------------------------------------
+  用module_init等 进行模块初始化时,注册了一个名为soc-audio的Platform设备,
+  同时把struct  snd_soc_card  smdk 设到platform_device结构的dev.drvdata字段中.
+  
+  snd_soc_card结构,又引出了Machine驱动的另外两个个数据结构:
+
+        (实例:smdk_dai[] )
+        snd_soc_ops(实例:smdk_ops )
+
+其中,snd_soc_dai_link中,指定了Platform、 Codec、 codec_dai、 cpu_dai 的名字.
+Machine驱动将会利用这些名字去匹配已经在系统中注册的platform,codec,dai.
+
+而，这些注册的部件，又都是在另外各自的 Platform驱动文件， Codec驱动文件中定义的,
+这样看来,
+【Machine驱动】的设备初始化代码,就是选择 合适的Platform,Codec,dai,并用它们填充以上2个数据结构（snd_soc_card, snd_soc_dai_link）,
+然后注册上这个Platform设备即可？？？ （yes...）
+
+当然还要实现 负责 连接Platform和Codec的 dai_link 对应的Ops结构体,即smdk_ops。它只实现了hw_params函数:smdk_hw_params...
+
+-------------------------------------------------------------------------
+2. 注册Platform Driver, Macihne驱动第2步开始了
+-------------------------------------------------------------------------
+接着就是 老生常谈了， Platform—driver Probe函数()被开调用了...
+它先从platform_device参数中取出snd_soc_card,
+    然后调用snd_soc_register_card(),
+          通过snd_soc_register_card(),为snd_soc_pcm_runtime[]数组kzalloc,
+               每一个dai_link对应snd_soc_pcm_runtime[]数组的一个单元,
+                    然后把snd_soc_card中的dai_link配置复制到相应的snd_soc_pcm_runtime中,
+                          最后,剩下大部分的工作, 都在snd_soc_instantiate_card()中实现。   
+                          
+                                下面就看看snd_soc_instantiate_card()做了些什么:
+                                -------------------------------------
+                                snd_soc_instantiate_card() 做的工作1
+                                -------------------------------------
+                                    1.  该函数首先利用card->instantiated()来判断该卡是否已经实例化,如果已经实例化则直接返回,
+                                        否则遍历每一对dai_link,进行codec---platform---dai的绑定工作,看是不是：
+                                               /* bind DAIs */
+                                               for (i = 0; i < card->num_links; i++)
+                                                    soc_bind_dai_link(card, i);   //扫描三个链表
+
+
+                                                ASoC定义了3个全局的链表头变量: 
+                                                      codec_list、
+                                                      dai_list、
+                                                      platform_list, （是什么list？ ASoC的声卡list？）
+
+                                              系统中所有的Codec、DAI、Platform都在注册时（各自注册时机是？ 各自Device insmode时），连接到这三个全局链表上！
+
+                                              soc_bind_dai_link函数逐个扫描这三个链表,根据card->dai_link[]中的名称进行匹配,
+                                                    匹配后把相应的codec,dai和platform实例  赋值到card->rtd[]中(snd_soc_pcm_runtime).
+
+                                                          经过这个过程后,snd_soc_pcm_runtime:(card->rtd)中保存了本Machine中使用的Codec,DAI和Platform驱动的信息.
+
+                                -------------------------------------
+                                snd_soc_instantiate_card() 做的工作2
+                                -------------------------------------
+                                    2. snd_soc_instantiate_card接着初始化Codec的寄存器缓存,然后调用标准的alsa KPI函数创建声卡实例: 才...
+
+                                            /* 
+                                            Card Bind Complete, So Register a Sound Card!!! 才... */
+
+                                            ret = snd_card_create(SNDRV_DEFAULT_IDX1, SNDRV_DEFAULT_STR1, card->owner, 0, &card->snd_card);
+                                            card->snd_card->dev = card->dev;
+
+                                            card->dapm.bias_level = SND_SOC_BIAS_OFF;
+                                            card->dapm.dev = card->dev;
+                                            card->dapm.card = card;
+                                            
+                                -------------------------------------
+                                snd_soc_instantiate_card() 做的工作3
+                                -------------------------------------
+                                    3. 然后,依次调用各个子结构的probe函数:(干什么？ 在这个时间点？ )
+
+                                           /* initialise the sound card only once */
+                                                  if (card->probe) {
+                                                        ret = card->probe(card);   //干什么？
+
+                                           /* early DAI link probe */
+                                            for (i = 0; i < card->num_links; i++) {
+                                                        ret = soc_probe_dai_link(card, i, order);  //干什么？ 做了很多事情...
+                                                        （挨个调用了codec,dai和platform驱动的probe函数,还调用soc_new_pcm()）
+
+                                            for (i = 0; i < card->num_aux_devs; i++) {
+                                                         ret = soc_probe_aux_dev(card, i);       
+                                                      
+                                        在上面的soc_probe_dai_link()函数中做了比较多的事情:
+                                        该函数除了挨个调用了codec,dai和platform驱动的probe函数外, 在最后还调用了soc_new_pcm()函数，用于创建标准alsa驱动的pcm逻辑设备！ 才做...
+
+                                        soc_new_pcm()函数首先初始化snd_soc_runtime中的snd_pcm_ops字段,也就是rtd->ops中的部分成员,例如open,close,hw_params等,
+                                        紧接着调用标准alsa驱动中的创建pcm的函数snd_pcm_new()创建声卡的pcm实例,pcm的private_data字段设置为该runtime变量rtd,
+                                        然后用platform驱动中的snd_pcm_ops替换部分pcm中的snd_pcm_ops字段,最后,调用platform驱动的pcm_new回调,该回调实现该platform下的
+                                        dma内存申请和dma初始化等相关工作
+
+                                        【！！！到这里,声卡和他的pcm实例创建完成！！！】.
+
+                                        soc_probe_dai_link(struct snd_soc_card *card, int num, int order)
+                                        {
+                                            ......
+                                            /* set default power off timeout */
+                                            rtd->pmdown_time = pmdown_time;
+
+                                            /* probe the cpu_dai。 现在需要？ 之前都做不了这个动作*/
+                                            if (!cpu_dai->probed && cpu_dai->driver->probe_order == order) {
+
+                                                if (cpu_dai->driver->probe) {
+                                                    ret = cpu_dai->driver->probe(cpu_dai);
+                                                }
+                                                cpu_dai->probed = 1;
+                                                /* mark cpu_dai as probed and add to card dai list */
+                                                list_add(&cpu_dai->card_list, &card->dai_dev_list);
+                                            }
+
+                                            /* probe the CODEC 现在需要？ 之前都做不了这个动作*/
+                                            if (!codec->probed &&
+                                                    codec->driver->probe_order == order) {
+                                                ret = soc_probe_codec(card, codec);
+                                            }
+
+                                            /* probe the platform 之前都做不了这个动作*/
+                                            if (!platform->probed && platform->driver->probe_order == order) {
+                                                ret = soc_probe_platform(card, platform);
+                                            }
+
+                                            /* probe the CODEC DAI 之前都做不了这个动作*/
+                                            if (!codec_dai->probed && codec_dai->driver->probe_order == order) {
+                                                if (codec_dai->driver->probe) {
+                                                    ret = codec_dai->driver->probe(codec_dai);
+                                                }
+
+                                                /* mark codec_dai as probed and add to card dai list */
+                                                codec_dai->probed = 1;
+                                                list_add(&codec_dai->card_list, &card->dai_dev_list);
+                                            }
+
+                                            /* complete DAI probe during last probe 之前都做不了这个动作*/
+                                            if (order != SND_SOC_COMP_ORDER_LAST)
+                                                return 0;
+
+                                            ret = soc_post_component_init(card, codec, num, 0);
+                                            if (ret)
+                                                return ret;
+                                                ......
+                                            /* create the pcm */
+                                            ret = soc_new_pcm(rtd, num);   //该函数首先初始化snd_soc_runtime中的snd_pcm_ops字段,也就是rtd->ops中的部分成员,例如open,close,hw_params等,紧接着调用标准alsa驱动中的创建pcm的函数snd_pcm_new()创建声卡的pcm实例,pcm的private_data字段设置为该runtime变量rtd,然后用platform驱动中的snd_pcm_ops替换部分pcm中的snd_pcm_ops字段,最后,调用platform驱动的pcm_new回调,该回调实现该platform下的dma内存申请和dma初始化等相关工作.到这里,声卡和他的pcm实例创建完成.
+                                                ........
+                                            return 0;
+                                        }
+
+                                -------------------------------------
+                                snd_soc_instantiate_card() 做的工作4
+                                -------------------------------------
+                                回到snd_soc_instantiate_card函数,完成snd_card和snd_pcm的创建后,接着对dapm和dai支持的格式， 
+                                做出一些初始化和设置工作后,调用了card->late_probe(card)进行一些最后的初始化合设置工作,
+                                
+                                最后则是调用标准alsa驱动的声卡注册函数， 【对声卡进行注册】:  //上面一直没完成声卡，现在终于可以注册了。 
+                               if (card->late_probe) {
+                                    ret = card->late_probe(card);
+                                    if (ret < 0) {
+                                        dev_err(card->dev, "%s late_probe() failed: %d\n",
+                                            card->name, ret);
+                                        goto probe_aux_dev_err;
+                                    }
+                                }
+
+                                snd_soc_dapm_new_widgets(&card->dapm);
+
+                                if (card->fully_routed)
+                                    list_for_each_entry(codec, &card->codec_dev_list, card_list)
+                                        snd_soc_dapm_auto_nc_codec_pins(codec);
+
+                                ret = snd_card_register(card->snd_card);  //【对声卡进行注册】, 现在终于可以注册了。 
+                                if (ret < 0) {
+                                    printk(KERN_ERR "asoc: failed to register soundcard for %s\n", card->name);
+                                    goto probe_aux_dev_err;
+                                }
+                                
+             至此,整个Machine驱动的初始化已经完成,通过各个子结构的probe调用,实际上,也完成了部分Platfrom驱动和Codec驱动的初始化工作....
+
+--------------------------------------------------------------------------------------------------------------------------------
+ASoC整个过程总结！
+--------------------------------------------------------------------------------------------------------------------------------
+soc_probe()       //platform driver
+    --->snd_soc_register_card()     //soc_core
+        --->card->rtd = kzalloc()...    //soc_core
+          --->dai_link_from_card_to_rtd() //soc_core
+            --->snd_soc_instantiate_card()  //soc_core
+              --->soc_bind_dai_link()         //soc_core
+                  --->snd_card_create()           //sound/core
+                      --->soc_probe_dai_link()      //soc_core
+                            --->cpu_dai->driver->probe()   //probe the cpu dai.
+                            --->soc_probe_codec()          //probe the codec.
+                                 --->codec->driver->probe()//(dai_driver)
+                            --->soc_probe_platform()       //probe the platform.
+                                --->platform->driver->probe()     //(platform_driver)
+                            --->codec_dai->driver->probe() //probe the codec DAI.
+                            --->soc_new_pcm()               //
+                                --->soc_pcm_new()                  //sound/core
+          --->soc_probe_aux_dev()
+          --->card->late_probe()
+          --->snd_card_register()
+                            
+                            
+                            
+                            
+                            
+                            
