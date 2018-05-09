@@ -1,3 +1,7 @@
+/////////////////////////////////
+初期化のframework：
+/////////////////////////////////
+
 まず、SPI Controllerの初期化を例として挙げると、     
 Probeの中で、request_irq等をする以外に、spi_master構造体を新規している。     
 このspi_masterが、実際に動いているKernelの中でSPI Controllerを代表するものである。     
