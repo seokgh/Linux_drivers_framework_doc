@@ -1,1 +1,14 @@
-sd/emmc framework docs.
+まず、SPI Controllerの初期化を例として挙げると、     
+Probeの中で、request_irq等をする以外に、spi_master構造体を新規している。     
+このspi_masterが、実際に動いているKernelの中でSPI Controllerを代表するものである。     
+
+SD/eMMCコントローラ等も類似であるはずです:　　　
+
+起動順番から言うと
+step0. MMC Core層：　　subsys_initcall(mmc_init); //mmc_bus_type新規、登録.
+
+step1. Host Driver層： xxx_probe() ---> mmc_add_host() --->自分に繋がっているCard Detect、attach(mmc_rescan、mmc_attach_mmc) —> Card Device Add(mmc_card).
+
+step2. Card Driver層： module_init(mmc_blk_init) ---> Card Driver Add(mmc_driver).
+
+step1と2がmmc bus上でペアリングできて、FS向けのMMC Blockデバイスを新規し始める...
