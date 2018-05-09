@@ -1,0 +1,25 @@
+************************************************i2c slave driver が probe されるルート (Codecが初期化されるルート)************************************************//まずi2c slave(i2c_device)が追加されるルート：
+(Host追加されたら、自分に繋がっているSlaveを検知)
+step1: platform_device 登録  //arch/arm/mach-xxx OR dtsのnode(i2c@るxxxxxx等)
+step2: platform_driver 登録  //drivers/i2c/busses/xxxxx.c 
+step3: platform_bus->match()により、i2c/busses/xxxxx.cのprobe()がCallされる.
+step4: xxx_probe()
+        --->i2c_add_adapter()で、i2c_adapterの登録を行う:
+          --->i2c_add_adapter(struct i2c_adapter *adapter)
+            --->i2c_register_adapter(adapter)
+                  --->of_i2c_register_devices(adap);//dts掲載のslave deviceを作る。sysfsも登録sys/bus/i2c/devices/xx-xx                    --->i2c_new_device();   //i2c slave 新規!                --->acpi_i2c_register_devices(adap);        //?                --->acpi_i2c_install_space_handler(adap);   //?                --->i2c_scan_static_board_info(adap);       //古い方式、今は空、無視可.                
+
+(実はLinuxで、i2c slaveデバイスを追加する方法は、四つあるが、後で書く)
+......................................................................................................
+//次に、i2c slave driverが登録される流を見る：
+module_init(xxx_init);
+i2c_add_driver()    
+      --->i2c_register_driver()   
+          --->i2c_driver->driver.bus = &i2c_bus_type
+              --->driver_register();  //この動作で、i2c_bus_typeのmatch関数が呼ばれる
+                --->i2c_bus_type.match()
+                      --->i2c_device_match()
+                         --->of_driver_match_device/i2c_match_id (i2c_driver->id_table->name と client->nameを比べ)
+                             一致したら
+                                  --->driver_register()
+                                       --->driver_probe_deviceにて、i2c_deviceとi2c_driverをペアリングさせ、ようやくi2c slave driveのprobeが呼ばれることになる.
