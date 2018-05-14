@@ -1,5 +1,161 @@
+-----------------------------------------
+1. ksoftirqd内核线程
+-----------------------------------------
+
+每个处理器都有一组辅助处理器软中断的内核线程(tasklet也是基于软中断)。当内核中出现大量软中断的时候，这些内核进程就会辅助处理它们。
+
+引入ksoftirq内核线程的原因：      
+      对于软中断，内核会选择在几个特殊时机进行处理。而在中断处理程序返回时处理是最常见的。
+      软中断被触发的频率有时可能很高，更不利的是，处理函数有时还会字形重复触发，那么就会导致用户空间进程无法获得足够的处理时间，因而处于饥饿状态。
+      单纯的对重新触发的软中断采取不立即处理的策略，也无法让人接受。
+
+
+最初的解决方案：
+
+1）只要还有被触发并等待处理的软中断，本次执行就要负责处理，重新触发的软中断也在本次执行返回前被处理。
+  这样做可以保证对内核的软中断采取即时处理的方式，关键在于，对重新触发的软中断也会立即处理。当负载很高的时候，此时若有大量被触发的软中断，
+  而它们本身又会重复触发。系统可能会一直处理软中断根本不能完成其他任务。
+2）不处理重新触发的软中断。在从中断返回的时候，内核和平常一样，也会检查所有挂起的软中断并处理他们。但是，任何自行重新触发的软中断不会马上处理，
+  它们被放到下一个软中断执行时机去处理。而这个时机通常也就是下一次中断返回的时候。可是，在比较空闲的系统中，立即处理软中断才是比较好的做法。
+  尽管它能保证用户空间不处于饥饿状态，但它却让软中断忍受饥饿的痛苦，而根本没有好好利用闲置的系统资源。
+
+     改进：
+     最终在内核中实现的方案是不会立即处理处理重新触发的软中断。
+     而作为改进，当大量软中断出现的时候，内核会唤醒一组内核线程来处理这些负载。这些线程在最低的优先级上运行（nice值是19），
+     这能避免它们跟其他重要的任务抢夺资源。但它们最终肯定会被执行，所以这个折中方案能够保证在软中断负担很中的时候用户程序不会因为得不到
+     处理时间处于饥饿状态。相应的，也能保证”过量“的软中断终究会得到处理。
+
+     每个处理器都有一个这样的线程。所有线程的名字都叫做ksoftirq/n，区别在于n，它对应的是处理器的编号。
+     在一个双CPU的机器上就有两个这样的线程，分别叫做ksoftirqd/0和ksoftirqd/1。为了保证只要有空闲的处理器，它们就会处理软中断，
+     所以给每个处理器都分配一个这样的线程。一旦该线程被初始化，它就会执行类似下面这样的死循环：
+
+在<Softirq.c(kernel)>中
+
+static int ksoftirqd(void * __bind_cpu) 
+{ 
+    set_user_nice(current, 19); 
+    current->flags |= PF_NOFREEZE;
+
+    set_current_state(TASK_INTERRUPTIBLE);
+
+    while (!kthread_should_stop()) { 
+        preempt_disable(); 
+        if (!local_softirq_pending()) { 
+            preempt_enable_no_resched(); 
+            schedule(); 
+            preempt_disable(); 
+        }
+
+        __set_current_state(TASK_RUNNING);
+
+        while (local_softirq_pending()) { 
+            /* Preempt disable stops cpu going offline. 
+               If already offline, we'll be on wrong CPU: 
+               don't process */ 
+            if (cpu_is_offline((long)__bind_cpu)) 
+                goto wait_to_die; 
+            do_softirq(); 
+            preempt_enable_no_resched(); 
+            cond_resched(); 
+            preempt_disable(); 
+        } 
+        preempt_enable(); 
+        set_current_state(TASK_INTERRUPTIBLE); 
+    } 
+    __set_current_state(TASK_RUNNING); 
+    return 0;
+
+wait_to_die: 
+    preempt_enable(); 
+    /* Wait for kthread_stop */ 
+    set_current_state(TASK_INTERRUPTIBLE); 
+    while (!kthread_should_stop()) { 
+        schedule(); 
+        set_current_state(TASK_INTERRUPTIBLE); 
+    } 
+    __set_current_state(TASK_RUNNING); 
+    return 0; 
+}
+
+
+    只要有待处理的软中断(由softirq_pending()函数负责发现)，ksoftirq就会调用do_softirq去处理它们。通过重复执行这样的操作，重新触发的软中断也会被执行。如果有必要，每次迭代后都会调用schedule()以便让更重要的进程得到处理机会。当所有需要执行的操作都完成以后，该内核线程将自己设置为TASK_INTERRUPTIBLE状态，唤起调度程序选择其他可执行进程投入运行。
+
+    只要do_softirq()函数发现已经执行过的内核线程重新触发了它自己，软中断内核线程就会被唤醒。
+
+※<2.8 进程间通讯>
+
+
+与进程同步一样，进程间通信(IPC)也分成集中式与分布式两种情况。下面介绍集中式系统中的进程间通信问题。
+　　进程间交换信息称为通信。有些情况下进程之间交换的信息量很少，例如仅交换某个状态信息，某资源忙状态或闲状态。有些情况下进程间交换大批数据，例如传送一批消息或整个文件。进程同步和互斥仅通过修改信号量的值向对方传递信息，从这个意义上看，进程同步和互斥是一种低级的进程通信。 
+　　当今操作系统中使用的进程通信方式有软中断、共享存储、共享文件、消息传递与信箱。前3种用于集中式系统，后2种方式既可用于集中式，也可用于分布式系统。
+
+　　1、软中断
+UN1X系统提供软中断机制作为进程通信的一种手段。软中断是通过发送规定的信号到指定进程，对方进程定时地查询有无外来信号，若有则按约定进行处理，处理完毕，返回断点继续执行原来的指令。可见，软中断是对硬中断的一种模拟。软中断存在较大的时延，不象硬中断能获得及时响应。例如，对方进程若处在阻塞队列，那么只有等到该进程执行时才能查询软中断信号。显然，从软中断信号发出到对方响应，时间可能拖得很长。此外，软中断处理程序运行在用户态，硬中断处理程序则运行在核心态。
+　　各种UNIX版本设置的软中断信号一般不超过32种，其中部分信号已规定了它们的意义，另一部分留给用户自己定义。信号由键盘产生或由进程中的错误(例如不合理的存储访问)或由许多异步事件(例如时钟或来自C-Shell的作业控制)产生。 
+　　1）主要数据结构
+　　软中断通信涉及进程的proc和user结构，有关部分介绍如下：
+　　(1)p_clktim
+　　它是报警时钟时间计数器，由系统调用alarm来设置它，时间一到就发送14号信号。
+　　(2)p_sigign 
+　　它是忽略信号标记，共32位，每位对应一个信号。当进程需要忽略某些信号时，就把p_sigign中与这些信号对应的位置上1。
+　　(3)p_sig 
+　　它是本进程接收信号的地方，共32位，正好对应32种不同的信号(因为信号只有27种，所以有5位未用)。第0位对应信号 1，第1位对应信号2，…，当本进程收到一个信号时，就在p_sig的对应位上置1。
+　　(4)u_signal[NSIG] 
+　　它是一个有32个元素的一维数组，每个元素占32位，正好存放一个地址值。此地址为软中断处理程序的入口。当u_signal[i](i =1 , 2 , ... , 32)的值为非零偶数时，表明它是信号软中断处理程序入口地址，本进程按该处理程序来响应软中断；当u_signal[i]的值为0时，则终止进程本身；当u_signal[i]的值为非零奇数时，该软中断不起作用，本进程忽略它，不予处理。
+　　2）信号发送
+　　供用户进程发送软中断信号的系统调用是kill(pid, sig)，其中pid为对方进程的标识号，sig为信号名称。如果pid为正整数，则把sig发给pid 号进程；如果pid 为0，则把sig发给同一进程组内的所有进程；如果pid 为-1，则把sig发送给自己或发送给除进程0和进程1之外的每个进程(用户是超级用户时)。具体发送工作由程序_psignal(&proc, sig)和_signal(p_pgrp, sig)完成。
+　　_psignal(&proc, sig)中的参数&proc是对方进程的proc首址，sig为信号名。当对方进程未忽略sig时，就在对方进程的p_sig中相应的位上设置sig 。为尽快处理软中断信号，当对方进程处于睡眠态SSLEEP且它的优先数p_pri大于25时，则唤醒它，并把它排入就绪队列中。
+　　_signal(p_pgrp, sig)中的第1参数p_pgrp为同组进程的组标识号，sig为信号名。该程序把信号发给同组其他进程，其实现比较简单：查找所有proc数组，凡其中proc结构中p_pgrp与第1参数相同者，就调用_psignal程序将sig发送给它。
+　　3）信号接收与处理
+UN1X系统V有一条系统调用signal(sig, func)用于软中断信号的接收与处理。正在执行的进程遇到时钟中断或核心态转至用户态或进入睡眠态之前或它退出低优先级睡眠之时，总要执行signal(sig, func)。
+　　signal(sig, func)中的第1参数sig为信号名，第2参数func为对该信号的处理方式。当func为 1时，忽略该信号；当func为0 时，终止本进程；当func非奇数，非零的正整数时，按u_signal[sig]中的入口地址转软中断处理程序。软中断处理程序必须预先设计好。
+　　当进程处于核心态时，即使收到软中断信号也不予理睬，只有当它返回用户态后，才处理收到的软中断信号。对于3号和12号软中断，则在调用_exit自我终止(因func＝0)之前，还需要调用_core程序，将进程的数据段转贮到文件core中，转贮成功时置成功标记，该标记连同信号一起作为参数提供给_exit程序，由该程序负责返回给接受进程。
+　　4）27种软中断信号
+下列27种软中断信号的注释部分即为它的功能说明
+　　　#define SIGHUP 1 /* hangup */
+　　　#define SIGINT 2 /* interrupt */
+　　　#define SIGQUIT 3 /* quit */
+　　　#define SIGILL 4 /* illegal instruction (not reset when caught ) */
+　　　#define SIGTRAP 5 /* trace trap (not reset when caught ) */
+　　　#define SIGIOT 6 /* IOT instruction */
+　　　#define SIGEMT 7 /* EMT instr uction */
+　　　#define SIGFPE 8 /* floating point exception */
+　　　#define SIGKILL 9 /* kill (cannot be caught or ignored) */
+　　　#define SIGBUS 10 /* bus error */
+　　　#define SIGSEGV 11 /* segmentation violation */
+　　　#define SIGSYS 12 /* bad argument to system call */
+　　　#define SIGPIPE 13 /* write on a pipe with no one to read it */
+　　　#define SIGALAM 14 /* alarm clock */
+　　　#define SIGTERM 15 /* software termination signal from kill */
+　　　#define SIGSTOP 17 /* sendoble stop signal not from tty */
+　　　#define SIGTSTP 18 /* stop signal from tty */
+　　　#define SIGCONT 19 /* continue a stopped process */
+　　　#define SIGCHLD 20 /* to parent on child stop or exit */
+　　　#define SIGTTIN 21 /* to readers pgrp upon background tty read */
+　　　#define SIGTTOOU 22 /* like TTIN for output it (tp→t-local ＆LTOSTOP) */
+　　　#define SIGTINT 23 /* to pgrp on every input character if LINTRUP */
+　　　#define SIGXCPU 24 /* exceeded CPU time limit */
+　　　#define SIGXFSZ 25 /* exceeded file size limit */
+　　　#define SIGSTAT 26 /* status update requsted */
+　　　#define SIGMOUS 27 /* mouse interrupt */
+　　　#define NSIG 32
+　　上述信号中，中断信号SIGNT(信号2)通常是从终端键盘上打入＾c字符所产生的，该信号常用于停止一条未完成的命令。退出信号SIGQUIT通常由打入＾\字符所产生，该信号还要使得有关的进程把它当前的存储器映象写入当前目录下的称之为core 的文件中， 以便于诊断程序使用。信号SIGSTOP和SIGCONT用于C-Shell的作业控制中停止和重新启动某个进程；信号SIGILL是由非法指令所产生的，SIGSEGV是由访问的存储器超出了进程的合法虚拟存储器空间所产生的。
+
+在下列地方会执行软中断：
+
+1.从一个硬件中断代码中返回
+
+2. 在ksoftirqd内核线程中
+
+3. 在显示检查和执行待处理的软中断代码中，如网络子系统.   
+
+(UN1X系统V有一条系统调用signal(sig, func)用于软中断信号的接收与处理。正在执行的进程遇到时钟中断或核心态转至用户态或进入睡眠态之前或它退出低优先级睡眠之时，总要执行signal(sig, func)。)
+
+
+
+
 /////////////////////////////////////////////////
-softirq 与 ksoftirqd 内核线程
+2. softirq 与 ksoftirqd 内核线程
 /////////////////////////////////////////////////
 本文是对《Understanding Linux Network Internals》笔记。
 
