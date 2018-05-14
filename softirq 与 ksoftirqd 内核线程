@@ -51,53 +51,30 @@ static int ksoftirqd(void * __bind_cpu)
 
     while (!kthread_should_stop()) { 
         preempt_disable(); 
-        if (!local_softirq_pending()) { 
+        if (!local_softirq_pending()) {       //负责发现 有没有待处理的软中断
             preempt_enable_no_resched(); 
-            schedule(); 
+            schedule();                       //如果有必要，每次迭代后都会调用schedule()，以便让更重要的进程得到处理机会
             preempt_disable(); 
         }
 
         __set_current_state(TASK_RUNNING);
 
-        while (local_softirq_pending()) { 
+        while (local_softirq_pending()) {     //负责发现 有没有待处理的软中断
             /* Preempt disable stops cpu going offline. 
                If already offline, we'll be on wrong CPU: 
                don't process */ 
             if (cpu_is_offline((long)__bind_cpu)) 
                 goto wait_to_die; 
-            do_softirq(); 
+            do_softirq();                //去处理待处理的软中断
             preempt_enable_no_resched(); 
-            cond_resched(); 
-            preempt_disable(); 
-        } 
-        preempt_enable(); 
-        set_current_state(TASK_INTERRUPTIBLE); 
-    } 
-    __set_current_state(TASK_RUNNING); 
-    return 0;
-
-wait_to_die: 
-    preempt_enable(); 
-    /* Wait for kthread_stop */ 
-    set_current_state(TASK_INTERRUPTIBLE); 
-    while (!kthread_should_stop()) { 
-        schedule(); 
-        set_current_state(TASK_INTERRUPTIBLE); 
-    } 
-    __set_current_state(TASK_RUNNING); 
-    return 0; 
-}
-
-
-只要有待处理的软中断(由softirq_pending()函数负责发现)，ksoftirq就会调用do_softirq去处理它们。 通过重复执行这样的操作，
-
+            
+要有待处理的软中断(由softirq_pending函数负责发现)，ksoftirqd就会调用do_softirq去处理它们。 通过重复执行这样的操作，
 重新触发的软中断也会被执行。
 
 如果有必要，每次迭代后都会调用schedule()，以便让更重要的进程得到处理机会。
 
 当所有需要执行的操作都完成以后，该内核线程，将自己设置为【TASK_INTERRUPTIBLE】状态，唤起调度程序，选择其他可执行进程投入运行。
-
-    只要do_softirq()函数发现已经执行过的内核线程，重新触发了它自己，软中断内核线程就会被唤醒。
+只要do_softirq()函数发现已经执行过的内核线程重新触发了它自己，软中断内核线程就会被唤醒。
 
 
 
