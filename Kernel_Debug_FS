@@ -1,0 +1,270 @@
+linux内核 DebugFS
+
+一、简介
+
+DebugFS，顾名思义，是一种用于内核调试的虚拟文件系统，内核开发者通过debugfs和用户空间交换数据。
+类似的虚拟文件系统还有procfs和sysfs等，这几种虚拟文件系统都并不实际存储在硬盘上，而是Linux内核运行起来后才建立起来。
+
+通常情况下，最常用的内核调试手段是printk。我们在调试时可能需要修改某些内核变量，这种情况下printk就无能为力，而如果为了修改某个值重新编译内核或者驱动又过于低效，此时就需要一个临时的文件系统可以把我们需要关心的数据映射到用户空间。不论是procfs或是sysfs，用它们来实现某些debug的需求，似乎偏离了它们创建的本意。比如procfs，其目的是反映进程的状态信息；而sysfs主要用于Linux设备模型。不论是procfs或是sysfs的接口应该保持相对稳定，因为用户态程序很可能会依赖它们。当然，如果我们只是临时借用procfs或者sysfs来作debug之用，在代码发布之前将相关调试代码删除也无不可。但如果相关的调试借口要在相当长的一段时间内存在于内核之中，就不太适合放在procfs和sysfs里了。故此，debugfs应运而生。
+
+默认情况下，debugfs会被挂载在目录/sys/kernel/debug之下，如果你的发行版里没有自行挂载，可以用下面命令手动完成：
+
+mount -t debugfs none /sys/kernel/debug
+
+
+二、打开debugfs选项
+
+要使用debugfs，首先我们要设置一下配置选项CONFIG_DEBUG_FS，可以在config文件中设置CONFIG_DEBUG_FS=y，也可以通过menuconfig来设置
+
+Kernelhacking --->
+
+                          [*]Debug Filesystem
+
+并且驱动中使用debugfs需要包含头文件<linux/debugfs.h>，为了在用户态下使用debugfs，必须把它mount到一个目录下
+
+
+三、Llinux内核为debugfs提供了非常简洁的API：
+
+debugfs
+|--mydebug
+   |--subdir
+      c
+   a
+   b
+
+
+1、创建和撤销目录及文件
+
+1)structdentry *debugfs_create_dir(constchar*name,structdentry *parent);
+第一个参数是目录的名称，第二个参数是指定这个目录的上级目录，如果是NULL，表示放在debugfs的根目录下
+my_debugfs_root = debugfs_create_dir("mydebug", NULL);
+sub_dir = debugfs_create_dir("subdir", my_debugfs_root);
+debugfs
+|--mydebug
+   |--subdir
+
+2)structdentry *debugfs_create_file(constchar*name, mode_t mode,structdentry *parent,void*data,conststructfile_operations *fops);
+文件c通过自定义的文件操作实现读写
+debugfs
+|--mydebug
+   |--subdir
+      c
+[cpp] view plain copy
+
+    static int c_open(struct inode *inode, struct file *filp)  
+    {  
+        filp->private_data = inode->i_private;  
+        return 0;  
+    }  
+       
+    static ssize_t c_read(struct file *filp, char __user *buffer,  
+            size_t count, loff_t *ppos)  
+    {  
+        if (*ppos >= 32)  
+            return 0;  
+        if (*ppos + count > 32)  
+            count = 32 - *ppos;  
+       
+        if (copy_to_user(buffer, hello + *ppos, count))  
+            return -EFAULT;  
+       
+        *ppos += count;  
+       
+        return count;  
+    }  
+       
+    static ssize_t c_write(struct file *filp, const char __user *buffer,  
+            size_t count, loff_t *ppos)  
+    {  
+        if (*ppos >= 32)  
+            return 0;  
+        if (*ppos + count > 32)  
+            count = 32 - *ppos;  
+       
+        if (copy_from_user(hello + *ppos, buffer, count))  
+            return -EFAULT;  
+       
+        *ppos += count;  
+       
+        return count;  
+    }  
+       
+    struct file_operations c_fops = {  
+        .owner = THIS_MODULE,  
+        .open = c_open,  
+        .read = c_read,  
+        .write = c_write,  
+    };  
+       
+       
+    debugfs_create_file("c", 0644, sub_dir, NULL, &c_fops);  
+
+
+3)voiddebugfs_remove(structdentry *dentry);
+4)voiddebugfs_remove_recursive(structdentry *dentry);
+在module_exit中，我们要释放创建的数据
+debugfs_remove_recursive(my_debugfs_root);
+这个函数可以帮我们逐步移除每个分配的dentry，如果你想要一个个手动移除，也可以直接调用debugfs_remove
+
+2、创建单值文件
+1)structdentry *debugfs_create_u8(constchar*name, mode_t mode,structdentry *parent, u8 *value);
+debugfs_create_u8("a", 0644, my_debugfs_root, &a);
+debugfs
+|--mydebug
+   |--subdir
+   a
+创建的文件名是a，对应内核中的变量名为a，文件属性为0644，可以对文件读写，相当于是对内核变量读写。
+
+2)structdentry *debugfs_create_u16(constchar*name, mode_t mode,structdentry *parent, u16 *value);
+3)structdentry *debugfs_create_u32(constchar*name, mode_t mode,structdentry *parent, u32 *value);
+4)structdentry *debugfs_create_u64(constchar*name, mode_t mode,structdentry *parent, u64 *value);
+其中，后缀为x8、x16、x32的这三个函数是指debugfs中的数据用十六进制表示。 
+5)structdentry *debugfs_create_x8(constchar*name, mode_t mode,structdentry *parent, u8 *value);
+6)structdentry *debugfs_create_x16(constchar*name, mode_t mode,structdentry *parent, u16 *value);
+7)structdentry *debugfs_create_x32(constchar*name, mode_t mode,structdentry *parent, u32 *value);
+8)structdentry *debugfs_create_size_t(constchar*name, mode_t mode,structdentry *parent,size_t*value);
+9)structdentry *debugfs_create_bool(constchar*name, mode_t mode,structdentry *parent, u32 *value);
+
+3、创建BLOB文件
+structdebugfs_blob_wrapper {
+    void*data;
+    unsignedlongsize;
+};
+structdentry *debugfs_create_blob(constchar*name, mode_t mode,structdentry *parent,structdebugfs_blob_wrapper *blob);
+char hello[32] = "hello world!\n";
+struct debugfs_blob_wrapper b;
+b.data = (void *)hello;
+b.size = strlen(hello) + 1;
+debugfs_create_blob("b", 0644, my_debugfs_root, &b);
+debugfs
+|--mydebug
+   |--subdir
+   b
+需要注意的是blob wrapper定义的数据只能是只读的，在本例中我们将文件b的权限设定为0644，但实际这个文件还是只读的，
+如果试图改写这个文件，系统将提示出错。
+因此，如果我们要对内核数组进行读写动作，blob wrapper就无法满足要求，我们只能自己定义文件操作来实现。
+
+4、其他
+structdentry *debugfs_rename(structdentry *old_dir,structdentry *old_dentry,structdentry *new_dir,constchar*new_name);
+structdentry *debugfs_create_symlink(constchar*name,structdentry *parent,constchar*target);
+
+以上部分转自：http://www.cnblogs.com/wwang/archive/2011/01/17/1937609.html
+
+
+三、实例
+这个实例虽然简单，但是融合了如何在debugfs目录下创建文件，并给出了文件的操作方法；
+也说明了如何创建变量文件，并且用户空间读写这个变量文件相当于是在读写内核空间的这个文件对应的变量
+[cpp] view plain copy
+
+    // dbgfs.c   
+    /* 
+     * (C) 05-07-2012 Yang Honggang (Joseph), Dslab <eagle.rtlinux@gmail.com> 
+     */  
+    #include <linux/debugfs.h>  
+    #include <linux/module.h>  
+    #include <linux/mm.h>  
+    #include <asm/uaccess.h>   
+      
+    struct dentry *parent, *sw, *inf;  
+    u32 tr_on = 0;  
+      
+    struct my_data_struct {  
+        void* data;  
+        unsigned long size;  
+    } mds;  
+      
+    struct page* pg;  
+      
+    static ssize_t data_read(struct file *file, char __user *user_buf,size_t count, loff_t *ppos)  
+    {  
+        unsigned long i;  
+        size_t cnt;  
+         
+        printk("tr_on:%d\n", tr_on);  
+        /* If the tracing_on is Y, fill the data buffer with debug info */  
+        if (tr_on) {  
+            tr_on = 0; /* Automaticlly clear the 'tracing_on' flag */  
+                    for (i = 0; i < (mds.size - 11) / 11; i ++) {  
+                    sprintf((char*)((char*)mds.data + i * 11 ), "%ld\n", i + 1000000000);  
+            }  
+              
+            /* Copy debug info to userspace */  
+            cnt = copy_to_user(user_buf, (const void *)mds.data, mds.size);  
+            return (mds.size - cnt);  
+        }  
+         
+        return 0;  
+    }  
+      
+    const struct file_operations fops =  
+    {  
+            .read = data_read,  
+    };  
+      
+    static int __init dbgfs_demon_init(void)  
+    {  
+      
+        printk("dbgfs init\n");   
+        /* Create dbgfs_demon directory in the debugfs root */  
+        parent = debugfs_create_dir("dbgfs_demon", NULL);  
+        if (!parent)   
+        return -1;     
+      
+    //在debugfs目录下创建变量名tracing_on，对应内核中的变量tr_on  
+        /* Create a output switch in dbgfs_demon */  
+        sw = debugfs_create_bool("tracing_on", S_IRWXU,parent, &tr_on);   
+        if (!sw)  
+        goto p_out;  
+          
+        /* Create a file for debug information exporting */  
+        mds.size = 4 * 1024;      
+        /* Allocate one page for info. storing */  
+        pg = alloc_pages(__GFP_HIGHMEM | __GFP_ZERO, 0);  
+        /* Covert to Memory address */  
+        mds.data = (void*) page_address(pg);  
+        if (!pg)  
+        goto p_out;  
+      
+    //在debugfs目录下创建文件名data，对应的文件操作为fops里面的read和write方法，  
+    //通过read函数中从用户空间传来的buf进行相应的处理。  
+        inf = debugfs_create_file("data", S_IRUSR,parent, &mds, &fops);  
+        if (!inf)  
+        goto sw_out;  
+      
+        return 0;  
+      
+    sw_out:  
+        debugfs_remove(sw);  
+        __free_pages(pg, 0);  
+    p_out:  
+        debugfs_remove(parent);  
+      
+        return -1;  
+    }  
+      
+    static void __exit dbgfs_demon_exit(void)  
+    {  
+      
+        if (pg)  
+        __free_pages(pg, 0);  
+      
+        debugfs_remove(inf);  
+        debugfs_remove(sw);  
+        debugfs_remove(parent);  
+        printk("dbgfs exit\n");  
+      
+        return;  
+    }  
+      
+    module_init(dbgfs_demon_init);    
+    module_exit(dbgfs_demon_exit);    
+    MODULE_LICENSE("GPL");    
+    MODULE_AUTHOR("Yang Honggang (Joseph) <eagle.rtlinux@gmail.com>");  
+
+模块会在/sys/kernel/debugfs根目录下创建
+dbgfs_demon/
+|--data
+|--tracing_on
+函数的操作逻辑是，如果tracing_on的值为Y，那么可以从文件data中读出有用的调试信息，
+如果为N，那么读data操作将不会返回任何数据。
+
