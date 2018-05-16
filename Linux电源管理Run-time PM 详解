@@ -40,13 +40,16 @@ Runtime PM（简称RPM）
 --------------------------------------------------------------------------------------------
 
 Runtime PM的软件框架：
+
 //
 device driver（或者driver所在的bus、class等）需要提供3个回调函数，runtime_suspend、runtime_resume和runtime_idle，
 分别用于suspend device、resume device和idle device。
 它们一般由RPM core在合适的时机调用，以便降低device的power consumption。
 
-//
-而调用的时机，最终是由device driver决定的。
+/////////////////////////////////////////
+而调用的时机，最终是由device driver决定的！！！！
+/////////////////////////////////////////
+
 driver会在适当的操作点，调用RPM core提供的put和get系列的helper function，汇报device的当前状态。
 RPM core会为每个device维护一个引用计数，get时增加计数值，put时减少计数值，当计数为0时，表明device不再被使用，
 可以立即或一段时间后suspend，以节省功耗。
@@ -66,6 +69,9 @@ RPM core会为每个device维护一个引用计数，get时增加计数值，put
 
 //
 鉴于这个现状，本文以及后续RPM有关的文章，会选取kernel（当前为linux-3.17），以便及时同步相关的更新。
+
+
+
 
 ---------------------------
 3. Runtime PM的运行机制
@@ -161,9 +167,9 @@ device是通过用户程序为用户提供服务的，而服务的方式分为�
 另外，如果设备驱动清楚地知道自己要做什么，也可以使用同步接口（pm_runtime_get_sync/pm_runtime_put_sync等），它们会直接调用.runtime_xxx回调函数，不过，后果自负！
 
 
-
+-----------------------------------
 3.4 Runtime PM过程中的同步问题
-
+-----------------------------------
 由于.runtime_xxx回调函数可能采用异步的形式调用，以及Generic PM suspend和RPM并存的现状，要求RPM要小心处理同步问题，包括：
 
     多个.runtime_suspend请求之间的同步；
@@ -175,19 +181,25 @@ device是通过用户程序为用户提供服务的，而服务的方式分为�
     等等。
 
 由此可知，RPM core将会有相当一部分代码，用来处理同步问题。
-3.5 级联设备之间的Runtime PM
 
+
+
+-----------------------------------
+3.5 级联设备之间的Runtime PM
+-----------------------------------
 struct device结构中，有一个parent指针，指向该设备的父设备（没有的话为空）。父设备通常是Bus、host controller，设备的正常工作，依赖父设备。体现在RPM中，就是如下的行为：
 
 1）parent设备下任何一个设备处于active状态，parent必须active。
-
 2）parent设备下任何一个设备idle了，要通知parent，parent以此记录处于active状态的child设备个数。
-
 3）parent设备下所有子设备都idle了，parent才可以idle。
 
 以上行为RPM core会自动处理，不需要驱动工程师太过操心。
-3.6 device的runtime status及其初始状态
 
+
+
+-----------------------------------
+3.6 device的runtime status及其初始状态
+-----------------------------------
 在Runtime Power Management的过程中，device可处于四种状态：RPM_ACTIVE、RPM_RESUMING、RPM_SUSPENDED和RPM_SUSPENDING。
 
     RPM_ACTIVE，设备处于正常工作的状态，表示设备的.runtime_resume回调函数执行成功；
@@ -201,92 +213,106 @@ struct device结构中，有一个parent指针，指向该设备的父设备（�
     注4：前面说过，.runtime_idle只是suspend前的过渡，因此runtime status和idle无关。
 
 device注册时，设备模型代码会调用pm_runtime_init接口，将设备的runtime status初始化为RPM_SUSPENDED，而kernel并不知道某个设备初始化时的真正状态，因此设备驱动需要根据实际情况，调用RPM的helper函数，将自身的status设置正确。
-4. runtime PM的API汇整
 
-RPM提供的API位于“include/linux/pm_runtime.h”中，在这里先浏览一下，目的有二：一是对前面描述的RPM运行机制有一个感性的认识；二是为后面分析RPM的运行机制做准备。
+
+
+-----------------------------------
+4. runtime PM的API汇整
+-----------------------------------
+RPM提供的API位于“include/linux/pm_runtime.h”中，在这里先浏览一下，
+目的有二：一是对前面描述的RPM运行机制有一个感性的认识；
+       二是为后面分析RPM的运行机制做准备。
 
 注5：我会把和驱动编写相关度较高的API加粗，其它的能不用就不用、能不看就不看！
 
 extern int __pm_runtime_idle(struct device *dev, int rpmflags);
 extern int __pm_runtime_suspend(struct device *dev, int rpmflags);
 extern int __pm_runtime_resume(struct device *dev, int rpmflags);
+    这三个函数是RPM的idle、put/suspend、get/resume等操作的基础，
+    根据rpmflag，有着不同的操作逻辑。 后续很多API，都是基于它们三个。 一般不会在设备驱动中直接使用。
 
-    这三个函数是RPM的idle、put/suspend、get/resume等操作的基础，根据rpmflag，有着不同的操作逻辑。后续很多API，都是基于它们三个。一般不会在设备驱动中直接使用。
+
 
 extern int pm_schedule_suspend(struct device *dev, unsigned int delay);
+    在指定的时间后（delay，单位是ms），suspend设备。该接口为异步调用，不会更改设备的引用计数，可在driver的.rpm_idle中调用，
+    免去driver自己再启一个timer的烦恼。
 
-    在指定的时间后（delay，单位是ms），suspend设备。该接口为异步调用，不会更改设备的引用计数，可在driver的.rpm_idle中调用，免去driver自己再启一个timer的烦恼。
 
 extern void pm_runtime_enable(struct device *dev);
 extern void pm_runtime_disable(struct device *dev);
+    设备RPM功能的enable/disable，可嵌套调用，会使用一个变量（dev->power.disable_depth）记录disable的深度。
+    只要disable_depth大于零，就意味着RPM功能不可使用，很多的API调用（如suspend/reesume/put/get等）会返回失败。
 
-    设备RPM功能的enable/disable，可嵌套调用，会使用一个变量（dev->power.disable_depth）记录disable的深度。只要disable_depth大于零，就意味着RPM功能不可使用，很多的API调用（如suspend/reesume/put/get等）会返回失败。
+    RPM初始化时，会将所有设备的disable_depth置为1，也就是disable状态，driver初始化完毕后，要根据设备的时机状态，调用这两个函数，
+    将RPM状态设置正确。
 
-    RPM初始化时，会将所有设备的disable_depth置为1，也就是disable状态，driver初始化完毕后，要根据设备的时机状态，调用这两个函数，将RPM状态设置正确。
 
 extern void pm_runtime_allow(struct device *dev);
 extern void pm_runtime_forbid(struct device *dev);
+    RPM core通过sysfs（drivers/base/power/sysfs.c），为每个设备提供一个“/sys/devices/.../power/control”文件，
+    通过该文件可让用户空间程序直接访问device的RPM功能。 这两个函数用来控制是否开启该功能（默认开启）。
 
-    RPM core通过sysfs（drivers/base/power/sysfs.c），为每个设备提供一个“/sys/devices/.../power/control”文件，通过该文件可让用户空间程序直接访问device的RPM功能。这两个函数用来控制是否开启该功能（默认开启）。
+
 
 extern int pm_runtime_barrier(struct device *dev);
+    这名字起的！
+    由3.3的描述可知，很多RPM请求都是异步的，这些请求会挂到一个名称为“pm_wq”的工作队列上，
+    这个函数的目的，就是清空这个队列，另外如果有resume请求，同步等待resume完成。
+    好复杂，希望driver永远不要用到它！！
 
-    这名字起的！！！
 
-    由3.3的描述可知，很多RPM请求都是异步的，这些请求会挂到一个名称为“pm_wq”的工作队列上，这个函数的目的，就是清空这个队列，另外如果有resume请求，同步等待resume完成。好复杂，希望driver永远不要用到它！！
 
 extern int pm_generic_runtime_idle(struct device *dev);
 extern int pm_generic_runtime_suspend(struct device *dev);
 extern int pm_generic_runtime_resume(struct device *dev);
-
     几个通用的函数，一般给subsystem的RPM driver使用，直接调用devie driver的相应的callback函数。
 
-extern void pm_runtime_no_callbacks(struct device *dev);
 
+
+extern void pm_runtime_no_callbacks(struct device *dev);
     告诉RPM core自己没有回调函数，不用再调用了（或者调用都是成功的），真啰嗦。
 
-extern void pm_runtime_irq_safe(struct device *dev);
 
-    告诉RPM core，如下函数可以在中断上下文调用：
-    pm_runtime_idle()
-    pm_runtime_suspend()
-    pm_runtime_autosuspend()
-    pm_runtime_resume()
-    pm_runtime_get_sync()
-    pm_runtime_put_sync()
-    pm_runtime_put_sync_suspend()
-    pm_runtime_put_sync_autosuspend()
+extern void pm_runtime_irq_safe(struct device *dev);
+    告诉RPM core，如下函数可以在中断上下文调用：
+                pm_runtime_idle()
+                pm_runtime_suspend()
+                pm_runtime_autosuspend()
+                pm_runtime_resume()
+                pm_runtime_get_sync()
+                pm_runtime_put_sync()
+                pm_runtime_put_sync_suspend()
+                pm_runtime_put_sync_autosuspend()
+
+
+
 
 static inline int pm_runtime_idle(struct device *dev)
 static inline int pm_runtime_suspend(struct device *dev)
 static inline int pm_runtime_resume(struct device *dev)
-
     直接使用同步的方式，尝试idle/suspend/resume设备，如果条件许可，就会执行相应的callback函数。driver尽量不要使用它们。
 
 static inline int pm_request_idle(struct device *dev)
 static inline int pm_request_resume(struct device *dev)
-
     和上面类似，不过调用方式为异步。尽量不要使用它们。
+
 
 static inline int pm_runtime_get(struct device *dev)
 static inline int pm_runtime_put(struct device *dev)
-
     增加/减少设备的使用计数，并判断是否为0，如果为零，尝试调用设备的idle callback，如果不为零，尝试调用设备的resume callback。
-
     这两个接口是RPM的正统接口啊，多多使用！
+    
 
 static inline int pm_runtime_get_sync(struct device *dev)
 static inline int pm_runtime_put_sync(struct device *dev)
 static inline int pm_runtime_put_sync_suspend(struct device *dev)
-
-    和上面类似，只不过为同步调用。另外提供了一个可直接调用suspend的put接口，何必的！
+    和上面类似，只不过为同步调用。 另外提供了一个可直接调用suspend的put接口，何必的！
 
 
 static inline int pm_runtime_autosuspend(struct device *dev)
 static inline int pm_request_autosuspend(struct device *dev)
 static inline int pm_runtime_put_autosuspend(struct device *dev)
 static inline int pm_runtime_put_sync_autosuspend(struct device *dev)
-
     autosuspend相关接口。所谓的autosuspend，就是在suspend的基础上，增加一个timer，还是觉得有点啰嗦。不说了。
 
 static inline void pm_runtime_use_autosuspend(struct device *dev)
@@ -311,17 +337,14 @@ extern unsigned long pm_runtime_autosuspend_expiration(struct device *dev);
 -----------------------------------------------------------------------------------------
 Run-time PM 详解
 
- 
-
-Run-time PM. 
-每个device或者bus都会向run-time PM core注册3个callback:
+每个device或者bus, 都会向run-time PM core注册3个callback:
 
 struct dev_pm_ops {
-...
-int (*runtime_suspend)(struct device *dev);
-int (*runtime_resume)(struct device *dev);
-int (*runtime_idle)(struct device *dev);
-...
+      ...
+      int (*runtime_suspend)(struct device *dev);
+      int (*runtime_resume)(struct device *dev);
+      int (*runtime_idle)(struct device *dev);
+      ...
 };
 
 每个device或者bus都会有2个计数器: 
@@ -353,7 +376,7 @@ if (dev->bus && dev->bus->pm && dev->bus->pm->runtime_idle) {
 
 按照dev->bus, dev->type, dev->class的顺序去调用,
 
-
+//
 那么，疑问了，那runtime_suspend函数什么时候调用？
 runtime_suspend函数不会被RPM core主动去调用，一般情况下是在bus，或者class的idle函数里去调用。
 
@@ -363,7 +386,7 @@ static int xxx_runtime_idle(struct device *dev)
 return pm_schedule_suspend(dev, 50);
 }
 
-pm_schedule_suspend函数会去调用device里的suspend函数，调用顺序代码如下：
+//pm_schedule_suspend函数会去调用device里的suspend函数，调用顺序代码如下：
 if (dev->bus && dev->bus->pm && dev->bus->pm->runtime_suspend) {
 spin_unlock_irq(&dev->power.lock);
 
@@ -390,26 +413,62 @@ dev->power.runtime_error = retval;
 } else {
 retval = -ENOSYS;
 }
-发现了吧，和idle顺序是一模一样哒。当然肯定也会有不一样了，否则runtime_suspend函数没存在意义了。在跑完此dev的bus or type or class的suspend函数以后。紧接着会做一个巨艰巨的任务，就是
+
+
+
+发现了吧，和idle顺序是一模一样哒。当然肯定也会有不一样了，否则runtime_suspend函数没存在意义了。
+在跑完此dev的bus or type or class的suspend函数以后。
+
+紧接着会做一个巨艰巨的任务，就是
 if (parent && !parent->power.ignore_children) {
-spin_unlock_irq(&dev->power.lock);
-
-pm_request_idle(parent);
-
-spin_lock_irq(&dev->power.lock);
+      spin_unlock_irq(&dev->power.lock);
+      pm_request_idle(parent);
+      spin_lock_irq(&dev->power.lock);
 }
+
 会去调用当前这个device的parent device的idle函数！！！
 之后会去递归的往上层调用。为啥会这么做呢？？？
 其实RPM机制总体来说就是管理总线结构和主次设备结构的电源。
-假如一个bus上有2个device。这个bus首先会有一个bus_type，其次还会有一个代表bus的device（谁说bus不是device了！）首先命名以下，bus device叫做Bdev, 两个bus上的子device是dev1, dev2。dev1,dev2是Bdev的子设备，也就是说dev1,dev2的parent是Bdev。
-其中bus_type里会有一套runtime_pm的三个callback，Bdev自身还有另一套runtime_pm的三个callback。
-当dev1的两个counter都为零了，就会调用bus_type里的runtime_idle，一般情况下这个idle会调用pm_runtime_suspend，仅按照上面的介绍，就会调用这个bus_type里的runtime_suspend call back。之后是不是就该是最重要的那一步了？pm_request_idle(parent);pm_request_idle里的一系列操作会首先判断parent的两个counter是否为零了，因为dev2还活着呢，所以条件不满足，返回！
-当dev2也来这么一套之后，再调用pm_request_idle(parent);的时候，Bdev里的runtime_idle就能跑啦。
-总结一下，bus_type的runtime_系列回调函数是用来处理bus上的device函数的。而bus自己的device的函数是用来处理自己的。
-因为体系结构的因素，bus套bus的情况，最后就会形成一个device大树。runtime这套机制就可以从根到树顶都能管理得到。比如：I2C device挂在I2C bus上，I2C bus controller是PCI的一个设备，因为挂在PCI上。这个PCI bus一般还是在南桥上，然后再通过南桥在跑到北桥PCI上。。。。是不是块疯了。。。。但是有这么个递归电源管理。一切搞定。
 
-说完了睡流程了。还有醒流程。
-当device调用完suspend函数后，这个device就处于了一个suspended状态。当某个device被唤醒后，就会调用pm_runtime_get_sync类似的函数。这个函数做了啥捏？通过上述的睡过程，有点脑子的人就能想出醒流程，反着来呗！！！必须从大树顶往下跑，才能最后让根伸出来。代码如下：
+
+假如一个bus上有2个device。
+这个bus首先会有一个bus_type，其次还会有一个代表bus的device（谁说bus不是device了！）
+首先命名以下，bus device叫做Bdev, 
+两个bus上的子device是dev1, dev2。
+dev1,dev2是Bdev的子设备，也就是说dev1,dev2的parent是Bdev。
+
+其中bus_type里会有一套runtime_pm的3个callback，Bdev自身还有另一套runtime_pm的三个callback。
+
+当dev1的两个counter都为零了，就会调用bus_type里的runtime_idle，一般情况下这个idle会调用pm_runtime_suspend，仅按照上面的介绍，
+就会调用这个bus_type里的runtime_suspend call back。
+
+之后是不是就该是最重要的那一步了？pm_request_idle(parent);
+pm_request_idle里的一系列操作会首先判断parent的两个counter是否为零了，因为dev2还活着呢，所以条件不满足，返回！
+
+当dev2也来这么一套之后，再调用pm_request_idle(parent);的时候，Bdev里的runtime_idle就能跑啦。
+
+
+总结一下，
+bus_type的runtime_系列回调函数是用来处理bus上的device函数的。而bus自己的device的函数是用来处理自己的。
+因为体系结构的因素，bus套bus的情况，最后就会形成一个device大树。
+
+runtime这套机制就可以从根到树顶都能管理得到。
+
+比如：I2C device挂在I2C bus上，I2C bus controller是PCI的一个设备，因为挂在PCI上。
+这个PCI bus一般还是在南桥上，然后再通过南桥在跑到北桥PCI上。。。。
+是不是疯了...但是有这么个递归电源管理,一切搞定...
+
+
+说完了睡的流程,
+-----------------------------------------------------------------------------------
+还有醒的流程:
+
+当device调用完suspend函数后，这个device就处于了一个suspended状态。
+当某个device被唤醒后，就会调用pm_runtime_get_sync类似的函数。
+
+这个函数做了啥呢？ 通过上述的睡过程，有点脑子的人就能想出醒流程，反着来呗！！！必须从大树顶往下跑，才能最后让根伸出来。
+
+代码如下：
 
 if (!parent && dev->parent) {
 /*
