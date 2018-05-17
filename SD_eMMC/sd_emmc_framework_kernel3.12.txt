@@ -1,0 +1,580 @@
+硬件和软件平台：
+
+平台：TQ2440
+CPU：s3c2440
+内核版本：3.12.5
+
+基于SD规范4.10，即《SD Specifications Part 1 Physical Layer Simplified Specification Version 4.10》。
+
+-----------------------------------------------------------------------------------------------------------
+一、MMC子系统构架
+...
+-----------------------------------------------------------------------------------------------------------
+二、主要数据结构
+...
+-----------------------------------------------------------------------------------------------------------
+
+
+三、MMC子系统初始化
+
+首先看看子系统是如何初始化的，完成哪些工作。
+
+代码位于linux/drivers/mmc/core/core.c。
+
+
+
+    static int __init mmc_init(void)  
+    {  
+        int ret;  
+      
+        /* 创建一个工作队列*/  
+        workqueue = alloc_ordered_workqueue("kmmcd", 0);  
+        if (!workqueue)  
+            return -ENOMEM;  
+      
+        /* 注册mmc总线,总线提供probe方法 
+           并直接在内部调用驱动probe方法*/  
+        ret = mmc_register_bus();  
+        if (ret)  
+            goto destroy_workqueue;  
+          
+        /* 注册名为mmc_host的类*/  
+        ret = mmc_register_host_class();  
+        if (ret)  
+            goto unregister_bus;  
+      
+        /* 注册sdio总线,总线提供probe方法 
+           并直接在内部调用驱动probe方法*/  
+        ret = sdio_register_bus();  
+        if (ret)  
+            goto unregister_host_class;  
+      
+        return 0;  
+      
+    unregister_host_class:  
+        mmc_unregister_host_class();  
+    unregister_bus:  
+        mmc_unregister_bus();  
+    destroy_workqueue:  
+        destroy_workqueue(workqueue);  
+      
+        return ret;  
+    }  
+
+
+代码首先注册了一个工作队列，这个工作队列将用于扫描sd卡设备。会在后面进行说明。
+
+工作对类已内核线程的形式运行，可以用ps命令看到名为[kmmcd]的内核线程。
+
+接着注册了两条名为mmc和sdio的总线，以及一个名为mmc_host的类。具体代码如下：
+
+
+
+    static struct bus_type mmc_bus_type = {  
+        .name       = "mmc",  
+        .dev_attrs  = mmc_dev_attrs,  
+        .match      = mmc_bus_match,  
+        .uevent     = mmc_bus_uevent,  
+        .probe      = mmc_bus_probe,  
+        .remove     = mmc_bus_remove,  
+        .shutdown   = mmc_bus_shutdown,  
+        .pm     = &mmc_bus_pm_ops,  
+    };  
+      
+    int mmc_register_bus(void)  
+    {  
+        return bus_register(&mmc_bus_type);  
+    }  
+
+
+
+
+    static struct class mmc_host_class = {  
+        .name        = "mmc_host",  
+        .dev_release    = mmc_host_classdev_release,  
+    };  
+      
+    int mmc_register_host_class(void)  
+    {  
+        return class_register(&mmc_host_class);  
+    }  
+
+
+
+
+    static struct bus_type sdio_bus_type = {  
+        .name        = "sdio",  
+        .dev_attrs    = sdio_dev_attrs,  
+        .match        = sdio_bus_match,  
+        .uevent        = sdio_bus_uevent,  
+        .probe        = sdio_bus_probe,  
+        .remove        = sdio_bus_remove,  
+        .pm        = SDIO_PM_OPS_PTR,  
+    };  
+      
+    int sdio_register_bus(void)  
+    {  
+        return bus_register(&sdio_bus_type);  
+    }  
+      
+    static struct class mmc_host_class = {  
+        .name        = "mmc_host",  
+        .dev_release    = mmc_host_classdev_release,  
+    };  
+      
+    int mmc_register_host_class(void)  
+    {  
+        return class_register(&mmc_host_class);  
+    }  
+
+
+熟悉Linux的设备驱动模型的同学对这些肯定非常熟悉。总线和类的注册只是调用了相应的接口，这些就不再赘述了。
+
+其次，sdio总线不是关心的。只关心mmc总线。首先来看看mmc总线的match方法：
+
+代码位于linux/drivers/mmc/core/bus.c。
+
+
+
+    /* 
+     * This currently matches any MMC driver to any MMC card - drivers 
+     * themselves make the decision whether to drive this card in their 
+     * probe method. 
+     */  
+    static int mmc_bus_match(struct device *dev, struct device_driver *drv)  
+    {  
+        return 1;  
+    }  
+
+match返回居然直接返回了1。这表示任意的驱动都能和mmc卡设备成功匹配。
+
+从注释中也能看出，驱动的probe方法将会决定驱动是否能真正的匹配这个mmc卡设备。
+
+熟悉设备驱动模型的可能知道，随着match返回1表示匹配成功后，将会调用总线提供的probe方法。接着来看下mmc总线的probe方法。
+
+代码位于linux/drivers/mmc/core/bus.c。
+
+
+
+    static int mmc_bus_probe(struct device *dev)  
+    {  
+        struct mmc_driver *drv = to_mmc_driver(dev->driver);  
+        struct mmc_card *card = mmc_dev_to_card(dev);  
+      
+        return drv->probe(card);  
+    }  
+
+从这里可以看到在mmc的probe方法中直接调用了驱动probe方法，这也验证了刚才注释中所说的话。
+
+从上面分析可以看出，子系统初始化代码仅仅注册了两条总线和一个类，并建立了一个工作队列。
+
+
+四、核心层与控制器层间的接口API
+
+MMC核心层要和SD卡设备进行通信，为了完成这一个工作需要将CMD或者ACMD命令通过MMC/SD控制器发送给SD卡。
+
+那么MMC核心层如何将通信的数据包交给MMC/SD控制器，并让后者去发送呢？
+
+MMC通过函数mmc_wait_for_req完成这个工作，来看下这个函数。
+4.1 mmc_wait_for_req 函数
+下列代码位于linux/drivers/mmc/core/core.c。
+
+
+
+    /** 
+     *  mmc_wait_for_req - start a request and wait for completion 
+     *  @host: MMC host to start command 
+     *  @mrq: MMC request to start 
+     * 
+     *  Start a new MMC custom command request for a host, and wait 
+     *  for the command to complete. Does not attempt to parse the 
+     *  response. 
+     */  
+    void mmc_wait_for_req(struct mmc_host *host, struct mmc_request *mrq)  
+    {  
+        __mmc_start_req(host, mrq);  
+        mmc_wait_for_req_done(host, mrq);  
+    }  
+    EXPORT_SYMBOL(mmc_wait_for_req);  
+
+
+    通过注释可以发现，该函数会阻塞并等待request的完成。
+
+   该函数分两步走，第一步调用__mmc_start_req发送命令，第二部调用 mmc_wait_for_req_done等待命令完成。
+
+   分别来看下这两个函数 ：
+
+
+
+
+    static int __mmc_start_req(struct mmc_host *host, struct mmc_request *mrq)  
+    {  
+        /* 初始化completion，并设置done方法*/  
+        init_completion(&mrq->completion);  
+        mrq->done = mmc_wait_done;  
+        /* 如果mmc已经被拔出，设置错误并返回错误*/  
+        if (mmc_card_removed(host->card)) {  
+            mrq->cmd->error = -ENOMEDIUM;  
+            complete(&mrq->completion);  
+            return -ENOMEDIUM;  
+        }  
+        /* 发送命令 */  
+        mmc_start_request(host, mrq);  
+        return 0;  
+    }   
+
+该函数首先初始化了completion并设置了mrq->done方法为mmc_wait_done函数，该函数如下。
+
+
+
+    static void mmc_wait_done(struct mmc_request *mrq)  
+    {  
+        complete(&mrq->completion);  
+    }  
+
+这边使用completion的目的是为了等待request发送的完成。
+
+在第二步mmc_wait_for_req_done中会使用wait_for_completion函数等待mmc控制器完成request，控制器驱动在完成request的发送后，会调用mrq->done方法来激活处于等待中的wait_for_completion函数。
+
+随后函数会首先检查sd卡是否已被拔出，如果卡都被拔出了则没有必要发送request，可以直接调用copletion函数告之相关的等待函数，并设置error值然后返回错误。
+
+
+    #define mmc_card_removed(c) ((c) && ((c)->state & MMC_CARD_REMOVED))  
+
+如果sd卡存在，则调用mmc_start_request函数发送request，该函数如下：
+
+
+
+    static void  
+    mmc_start_request(struct mmc_host *host, struct mmc_request *mrq)  
+    {  
+    #ifdef CONFIG_MMC_DEBUG  
+        unsigned int i, sz;  
+        struct scatterlist *sg;  
+    #endif  
+      
+        if (mrq->sbc) {  
+            pr_debug("<%s: starting CMD%u arg %08x flags %08x>\n",  
+                 mmc_hostname(host), mrq->sbc->opcode,  
+                 mrq->sbc->arg, mrq->sbc->flags);  
+        }  
+      
+        pr_debug("%s: starting CMD%u arg %08x flags %08x\n",  
+             mmc_hostname(host), mrq->cmd->opcode,  
+             mrq->cmd->arg, mrq->cmd->flags);  
+      
+        if (mrq->data) {  
+            pr_debug("%s:     blksz %d blocks %d flags %08x "  
+                "tsac %d ms nsac %d\n",  
+                mmc_hostname(host), mrq->data->blksz,  
+                mrq->data->blocks, mrq->data->flags,  
+                mrq->data->timeout_ns / 1000000,  
+                mrq->data->timeout_clks);  
+        }  
+      
+        if (mrq->stop) {  
+            pr_debug("%s:     CMD%u arg %08x flags %08x\n",  
+                 mmc_hostname(host), mrq->stop->opcode,  
+                 mrq->stop->arg, mrq->stop->flags);  
+        }  
+      
+        WARN_ON(!host->claimed);  
+      
+        mrq->cmd->error = 0;  
+        mrq->cmd->mrq = mrq;  
+        if (mrq->data) {  
+            BUG_ON(mrq->data->blksz > host->max_blk_size);  
+            BUG_ON(mrq->data->blocks > host->max_blk_count);  
+            BUG_ON(mrq->data->blocks * mrq->data->blksz >  
+                host->max_req_size);  
+      
+    #ifdef CONFIG_MMC_DEBUG  
+            sz = 0;  
+            for_each_sg(mrq->data->sg, sg, mrq->data->sg_len, i)  
+                sz += sg->length;  
+            BUG_ON(sz != mrq->data->blocks * mrq->data->blksz);  
+    #endif  
+      
+            mrq->cmd->data = mrq->data;  
+            mrq->data->error = 0;  
+            mrq->data->mrq = mrq;  
+            if (mrq->stop) {  
+                mrq->data->stop = mrq->stop;  
+                mrq->stop->error = 0;  
+                mrq->stop->mrq = mrq;  
+            }  
+        }  
+        mmc_host_clk_hold(host);  
+        led_trigger_event(host->led, LED_FULL);  
+        /* 发送request*/  
+        host->ops->request(host, mrq);  
+    }  
+
+该函数会打印一堆信息，然后清除cmd->error，并绑定cmd和mrq，接着如果mrq是请求数据
+
+mmc_host_clk_hold函数是通过宏CONFIG_MMC_CLKGATE来进行使能的，这个宏默认是不打开的，具体就不分析了，简要说下这个宏的作用。
+
+这个宏的作用是使能时钟门控功能，这个功能在不需要MMC控制器工作的时候，停止MMC控制器，以节省功耗。
+
+随后会调用led_trigger_event触发led事件，这个牵涉到Led子系统，就不进行说明了。
+
+顺便提一句，s3c2440的mmc控制器驱动并没有使用这个led触发功能，也就是说host->led是为空的。
+
+最后调用了mmc控制器驱动提供的request方法发送request。
+
+这里需要注意下函数指针的形参：一个为host表示mmc控制器，一个为mrq表示request（请求）。
+
+很显然，要求host指向的mmc控制器发送mrq指向的请求，同时，也可以看出所有传递到mmc控制器驱动的请求都是使用struct mmc_request结构体进行封装的。
+
+至此，第一步完成，接着来看第二步：
+
+
+
+    static void mmc_wait_for_req_done(struct mmc_host *host,  
+                      struct mmc_request *mrq)  
+    {  
+        struct mmc_command *cmd;  
+      
+        while (1) {  
+            wait_for_completion(&mrq->completion);  
+      
+            cmd = mrq->cmd;  
+      
+            /* 
+             * If host has timed out waiting for the sanitize 
+             * to complete, card might be still in programming state 
+             * so let's try to bring the card out of programming 
+             * state. 
+             */  
+            if (cmd->sanitize_busy && cmd->error == -ETIMEDOUT) {  
+                if (!mmc_interrupt_hpi(host->card)) {  
+                    pr_warning("%s: %s: Interrupted sanitize\n",  
+                           mmc_hostname(host), __func__);  
+                    cmd->error = 0;  
+                    break;  
+                } else {  
+                    pr_err("%s: %s: Failed to interrupt sanitize\n",  
+                           mmc_hostname(host), __func__);  
+                }  
+            }  
+            if (!cmd->error || !cmd->retries ||  
+                mmc_card_removed(host->card))  
+                break;  
+      
+            pr_debug("%s: req failed (CMD%u): %d, retrying...\n",  
+                 mmc_hostname(host), cmd->opcode, cmd->error);  
+            cmd->retries--;  
+            cmd->error = 0;  
+                    /* 没有成功，尝试再次发送request*/  
+                    host->ops->request(host, mrq);  
+        }  
+    }  
+
+这个函数首先调用了wait_for_completion来等待mmc控制器驱动调用mmc_wait_done来唤醒自己。
+
+被唤醒后会执行一系列检查，如果request成功发送，则会break，并直接返回。
+
+如果没有发送成功，只要retries非0，则会尝试再次调用mmc控制器驱动的request方法再次发送。
+
+
+
+
+4.2 CMD和ACMD发送函数
+
+通过4.1小结，知道MMC核心层如何将request交给MMC控制器驱动，并由后者发送该request给sd卡。
+
+通过SD卡规范，知道有两种形式的命令，一种为CMD，而另一种为ACMD。
+
+MMC子系统提供了两个函数来完成这两命令的发送，分别是mmc_wait_for_cmd和mmc_wait_for_app_cmd。
+
+先来看下CMD的发送函数：
+
+下列代码位于linux/drivers/mmc/core/core.c。
+
+    /** 
+     *  mmc_wait_for_cmd - start a command and wait for completion 
+     *  @host: MMC host to start command 
+     *  @cmd: MMC command to start 
+     *  @retries: maximum number of retries 
+     * 
+     *  Start a new MMC command for a host, and wait for the command 
+     *  to complete.  Return any error that occurred while the command 
+     *  was executing.  Do not attempt to parse the response. 
+     */  
+    int mmc_wait_for_cmd(struct mmc_host *host, struct mmc_command *cmd, int retries)  
+    {  
+        struct mmc_request mrq = {NULL};  
+      
+        WARN_ON(!host->claimed);  
+      
+        /* 清空应答 */  
+        memset(cmd->resp, 0, sizeof(cmd->resp));  
+        cmd->retries = retries;  
+      
+        /* 保存命令*/  
+        mrq.cmd = cmd;  
+        cmd->data = NULL;  
+      
+        /* 发送命令并等待response */  
+        mmc_wait_for_req(host, &mrq);  
+      
+        return cmd->error;  
+    }  
+
+有了4.1小结的分析，这个函数还是比较简单的。
+
+该函数首先清空命令的应答数据(resp)，并保存命令（cmd）到mrq中，随后调用4.1小节中的mmc_wait_for_req函数发送CMD。
+
+从这个函数的形参可以看出：所有需要发送的CMD都由mmc_command进行封装，在函数内部被mmc_request
+结构体进行再次封装，并将mmc_request交给MMC控制器驱动完成CMD的发送。
+
+接着看下ACMD命令的发送函数mmc_wait_for_app_cmd：
+
+下列代码位于Linux/drivers/mmc/core/sd_ops.h。
+
+
+
+    /** 
+     *  mmc_wait_for_app_cmd - start an application command and wait for 
+                       completion 
+     *  @host: MMC host to start command 
+     *  @card: Card to send MMC_APP_CMD to 
+     *  @cmd: MMC command to start 
+     *  @retries: maximum number of retries 
+     * 
+     *  Sends a MMC_APP_CMD, checks the card response, sends the command 
+     *  in the parameter and waits for it to complete. Return any error 
+     *  that occurred while the command was executing.  Do not attempt to 
+     *  parse the response. 
+     */  
+    int mmc_wait_for_app_cmd(struct mmc_host *host, struct mmc_card *card,  
+        struct mmc_command *cmd, int retries)  
+    {  
+        struct mmc_request mrq = {NULL};  
+      
+        int i, err;  
+      
+        BUG_ON(!cmd);  
+        BUG_ON(retries < 0);  
+      
+        err = -EIO;  
+      
+        /* 
+         * We have to resend MMC_APP_CMD for each attempt so 
+         * we cannot use the retries field in mmc_command. 
+         */  
+        for (i = 0;i <= retries;i++) {  
+            /* 发送CMD55*/  
+            err = mmc_app_cmd(host, card);  
+            if (err) {  
+                /* no point in retrying; no APP commands allowed */  
+                if (mmc_host_is_spi(host)) {  
+                    if (cmd->resp[0] & R1_SPI_ILLEGAL_COMMAND)  
+                        break;  
+                }  
+                continue;  
+            }  
+      
+            memset(&mrq, 0, sizeof(struct mmc_request));  
+      
+            memset(cmd->resp, 0, sizeof(cmd->resp));  
+            cmd->retries = 0;  
+      
+            mrq.cmd = cmd;  
+            cmd->data = NULL;  
+      
+            /* 发送ACMDx*/  
+            mmc_wait_for_req(host, &mrq);  
+      
+            err = cmd->error;  
+            /* 发送成功，直接break并返回*/  
+            if (!cmd->error)  
+                break;  
+      
+            /* no point in retrying illegal APP commands */  
+            if (mmc_host_is_spi(host)) {  
+                if (cmd->resp[0] & R1_SPI_ILLEGAL_COMMAND)  
+                    break;  
+            }  
+        }  
+      
+        return err;  
+    }  
+      
+    EXPORT_SYMBOL(mmc_wait_for_app_cmd);  
+
+该函数的形参cmd保存了代发送的ACMD命令。
+
+根据SD卡规范的要求：在发送ACMD命令只前，需要发送CMD55，以表示后面一个命令为AMD命令。
+
+所以，该函数首先调用mmc_app_cmd函数来发送CMD55命令，来看下这个函数：
+
+
+
+    int mmc_app_cmd(struct mmc_host *host, struct mmc_card *card)  
+    {  
+        int err;  
+        struct mmc_command cmd = {0};  
+      
+        BUG_ON(!host);  
+        BUG_ON(card && (card->host != host));  
+      
+        cmd.opcode = MMC_APP_CMD;   /* CMD55 */  
+      
+        if (card) {  
+            cmd.arg = card->rca << 16; /* 卡地址*/  
+            cmd.flags = MMC_RSP_SPI_R1 | MMC_RSP_R1 | MMC_CMD_AC;  
+        } else {  
+            cmd.arg = 0;    /* 卡地址*/  
+            cmd.flags = MMC_RSP_SPI_R1 | MMC_RSP_R1 | MMC_CMD_BCR;  
+        }  
+      
+        /* 发送cmd并等待（阻塞方式）*/  
+        err = mmc_wait_for_cmd(host, &cmd, 0);  
+        if (err)  
+            return err;  
+      
+        /* Check that card supported application commands */  
+        /* 检查card status第5位，判断SD卡是否支持ACMD*/  
+        if (!mmc_host_is_spi(host) && !(cmd.resp[0] & R1_APP_CMD))  
+            return -EOPNOTSUPP;  
+      
+        return 0;  
+    }  
+    EXPORT_SYMBOL_GPL(mmc_app_cmd);  
+
+先来看下SD规范中关于CMD55的说明：
+
+
+从上述命令说明中，可以看出：
+
+1）该命令为ac类型命令，也就是点对点命令，并且在DAT信号线上没有数据传输。
+2）其次，该命令的参数（31位至16位）为RCA，也就是卡的地址。
+
+3）最后，命令的应答数据格式为R1。
+
+
+回到函数中:
+cmd.arg为发送命令的参数，函数首先设置了命令的参数为sd卡地址（RCA），这符合上面的描述。
+
+随后调用了之前分析的mmc_wait_for_cmd函数发送CMD55命令。
+
+上面提到CMD55命令的响应为R1，其格式如下：
+
+
+其中32bit的card status作为响应数据被保存在resp数组中。
+
+card status的具体位定义请查看SD规范的4.10.1小结。
+
+最后检查CMD55的响应来判断SD卡是否支持ACMD命令。
+
+CMD55发送成功后，返回到mmc_wait_for_app_cmd函数中。
+
+接着，cmd被保存到mrq.cmd 中，并调用mmc_wait_for_req中发送ACMD命令。
+
+
+
+五、小结
+
+    本问主要对MMC子系统架构进行了简单的介绍，并给出了一些关键数据结构。
+    同时，对MMC子系统的初始化过程进行了简单分析，最后，重点介绍了CMD和ACMD命令的发送函数。
