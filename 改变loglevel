@@ -1,0 +1,21 @@
+Linux 日志级别(loglevel)详解
+
+
+
+前几天，我在想printk中到底是哪些信息会打印到console上，
+哪些东西可以通过dmesg来查看。
+
+参考了一些资料以及自己做的一些实验，总结一下Linux中的console loglevel以及printk, dmesg知识。
+
+只有当printk打印信息时的loglevel小于console loglevel的值（即：优先级高于console loglevel），这些信息才会被打印到console上。
+
+
+
+
+改变console loglevel的方法有如下几种：
+
+1.启动时Kernel boot option：loglevel=level
+2.运行时Runtime: dmesg -n level
+        （注意：demsg -n level 改变的是console上的loglevel，dmesg命令仍然会打印出所有级别的系统信息。）
+3.运行时Runtime: echo $level > /proc/sys/kernel/printk
+4.运行时Runtime:写程序使用syslog系统调用（可以man syslog）
