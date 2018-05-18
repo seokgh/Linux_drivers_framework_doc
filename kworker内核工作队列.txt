@@ -7,7 +7,118 @@ khelper/kworker/kthreadd/ksoftirqd/kblockd/khubd/events/
 ----------------------------
 kworker内核工作队列
 ----------------------------
+工作队列（work queue）
 
+绑定CPU的线程池中的线程:
+            其中cpu_id是cpu的ID，thread_id是创建的工作线程ID。
+未绑定CPU的线程池中的线程:
+            对于未绑定CPU的线程池中的线程，则显示为kworker/u:thread_id。 
+
+
+进入开发板的Shell，并输入如下的命令,来查看当前系统创建的工作线程：
+    # ps | grep kworker
+
+执行上面的命令后，会输出:
+sgh@sgh-OptiPlex-9020:~/workspace/hgrm/master$ busybox ps | grep kworker
+    4 root     [kworker/0:0H]
+   18 root     [kworker/1:0H]
+   24 root     [kworker/2:0H]
+   30 root     [kworker/3:0H]
+   36 root     [kworker/4:0H]
+   42 root     [kworker/5:0H]
+   48 root     [kworker/6:0H]
+   54 root     [kworker/7:0H]
+  239 root     [kworker/2:1H]
+  240 root     [kworker/4:1H]
+  242 root     [kworker/5:1H]
+  244 root     [kworker/0:1H]
+  259 root     [kworker/3:1H]
+  265 root     [kworker/1:1H]
+  331 root     [kworker/6:1H]
+  549 root     [kworker/7:1H]
+  ......
+  16031 root     [kworker/u16:3]
+  16057 root     [kworker/u16:0]
+  16170 root     [kworker/u16:1]
+
+如上n个工作线程。
+
+使用工作队列的方法非常简单: 一般可以在Linux驱动程序的初始化函数中使用 DECLARE_WORK宏 和 schedule_work函数,
+将工作节点添加到系统的工作队列中，如下：
+
+    //工作队列处理函数  
+    static void work_handler(struct work_struct *work)  
+    {  
+       printk(KERN_ALERT "work_handler is running.");  
+    } 
+    
+    static int _init demo_init(void)  
+    {  
+        DECLARE_WORK( wq, work_handler);  
+        schedule_work(&wq);  
+        return ret;  
+    }  
+    module_init(demo_init);  
+
+Linux内核也允许我们创建新的[工作线程]和[工作队列]---->这就是下面要讨论的另外一种使用工作队列的方法。
+
+
+现在看看实现的步骤:
+
+第1步：定义工作队列变量
+
+由于在这种使用工作队列的方法中所有核心代码完全由自己来编写，所以首先就需要定义一个workqueue_struct变量（可以是指针类型），workqueue_struct结构体（kernel/workqueue.c）的定义如下：
+
+    struct workqueue_struct {  
+          unsigned int flags;                               // 工作队列的标志  
+    //  这个共用体表示每个CPU上的工作队列，如果是单CPU的系统，使用single  
+          union {                                     
+                 struct cpu_workqueue_struct _percpu    *pcpu;  
+                 struct cpu_workqueue_struct        *single;  
+                 unsigned long                v;  
+          } cpu_wq;                  
+          struct list_head    list;                             //  指向所有工作队列的列表  
+          struct mutex  flush_mutex;                        //  保护工作队列的flushing  
+          int            work_color;      
+          int            flush_color;      
+          atomic_t        nr_cwqs_to_flush;             //  刷新当前工作队列的进程  
+          struct wq_flusher    *first_flusher;     
+          struct list_head    flusher_queue;      
+          struct list_head    flusher_overflow;   
+     
+          mayday_mask_t        mayday_mask;      
+          struct worker        *rescuer;      
+          int            saved_max_active;   
+          const char        *name;                  //  工作队列名称  
+    };  
+
+workqueue_struct结构体较复杂，一般没必要了解所有成员变量的含义。在workqueue_struct结构体中涉及一个cpu_workqueue_struct结构体（kernel/workqueue.c），该结构体的定义如下：
+
+    struct cpu_workqueue_struct {  
+           struct global_cwq    *gcwq;         
+    //  在每个CPU上的工作队列，wq指向相应CPU的workqueue_struct结构体  
+          struct workqueue_struct *wq;                    
+          int            work_color;      
+          int            flush_color;      
+          int            nr_in_flight[WORK_NR_COLORS];  
+          int            nr_active;      
+          int            max_active;     
+          struct list_head    delayed_works;    
+    };  
+
+通过上面的两个结构体可以看出，对于多CPU的设备，每一个CPU都有一个工作队列。当使用schedule_work方法将工作节点添加到系统工作队列，实际上就是添加到当前CPU的工作队列中。当然，在添加工作节点时还可以指定CPU，这一点在本节后面的部分介绍。
+
+第2步：创建工作队列
+
+使用create_workqueue宏可以创建工作队列，并返回工作队列结构体（workqueue_struct）的指针。create_workqueue的原型如下：
+
+    workqueue_struct* create_workqueue(name) 
+    
+    
+    
+
+
+----------------------------------------------------------
 工作队列, 是另一种将工作推后执行的形式，
 它可以把工作交给一个内核线程去执行，这个下半部是在进程上下文中执行的，因此，它可以重新调度,还有睡眠。
 
