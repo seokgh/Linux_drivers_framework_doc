@@ -1,0 +1,693 @@
+-----------------------------------------------------------
+linux kernel2.6.29  SD卡读写流程/mmc读写请求的整个过程就分析
+
+Goldfish Platform
+------------------------------------------------------------
+card/queue.c: 
+        mmc_init_queue()
+              --->blk_init_queue(mmc_request_fn, lock)    //绑定请求处理函数。
+                      --->该请求处理函数mmc_request_fn（）唤醒mmc_thread!!!
+                               --->与mmc_thread线程对应的处理函数mmc_queue_thread()执行与MMC对应的 mq->issue(mq,req).
+
+
+SD卡的读写操作,同其他块设备一样，都是异步的过程。
+
+当进程把request发到块设备请求队列后， 在真正读写时，mq->thread进程会被激活。 这个进程准确说属于内核线程，如下：
+
+44 static int mmc_queue_thread(void *d)
+45 {
+46     struct mmc_queue *mq = d;
+47     struct request_queue *q = mq->queue;
+48
+49     current->flags |= PF_MEMALLOC;
+50
+51     down(&mq->thread_sem);
+52     do {
+53         struct request *req = NULL;
+54
+55         spin_lock_irq(q->queue_lock);
+56         set_current_state(TASK_INTERRUPTIBLE);   //用信号量，保证只有一个线程操作mq。
+57         if (!blk_queue_plugged(q))
+58             req = elv_next_request(q);
+59         mq->req = req;
+60         spin_unlock_irq(q->queue_lock);
+61
+62         if (!req) {
+63             if (kthread_should_stop()) {
+64                 set_current_state(TASK_RUNNING);
+65                 break;
+66             }
+67             up(&mq->thread_sem);
+68             schedule();
+69             down(&mq->thread_sem);
+70             continue;
+71         }
+72         set_current_state(TASK_RUNNING);
+73
+74         mq->issue_fn(mq, req);    //线程对应的处理函数mmc_queue_thread()执行与MMC对应的 mq->issue(mq,req).
+75     } while (1);
+76     up(&mq->thread_sem);                     //用信号量，保证只有一个线程操作mq。
+77
+78     return 0;
+79 }
+
+通过51行和76行，保证只有一个线程操作mq，用信号量。
+
+接下来，第74行调用mq->issue_fn，即： mmc_blk_issue_rq。
+264 static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
+265 {
+266     struct mmc_blk_data *md = mq->data;
+267     struct mmc_card *card = md->queue.card;
+268     struct mmc_blk_request brq;
+269     int ret = 1, disable_multi = 0;
+270
+271 #ifdef CONFIG_MMC_BLOCK_DEFERRED_RESUME
+272     if (mmc_bus_needs_resume(card->host)) {
+273         mmc_resume_bus(card->host);
+274         mmc_blk_set_blksize(md, card);
+275     }
+276 #endif
+277
+278     mmc_claim_host(card->host);
+279
+280     do {
+281         struct mmc_command cmd;
+282         u32 readcmd, writecmd, status = 0;
+283
+284         memset(&brq, 0, sizeof(struct mmc_blk_request));
+285         brq.mrq.cmd = &brq.cmd;
+286         brq.mrq.data = &brq.data;
+287
+288         brq.cmd.arg = req->sector;
+289         if (!mmc_card_blockaddr(card))
+290             brq.cmd.arg <<= 9;
+291         brq.cmd.flags = MMC_RSP_SPI_R1 | MMC_RSP_R1 | MMC_CMD_ADTC;
+292         brq.data.blksz = 512;
+293         brq.stop.opcode = MMC_STOP_TRANSMISSION;
+294         brq.stop.arg = 0;
+295         brq.stop.flags = MMC_RSP_SPI_R1B | MMC_RSP_R1B | MMC_CMD_AC;
+296         brq.data.blocks = req->nr_sectors;
+297
+298         /*
+299          * The block layer doesn't support all sector count
+300          * restrictions, so we need to be prepared for too big
+301          * requests.
+302          */
+303         if (brq.data.blocks > card->host->max_blk_count)
+304             brq.data.blocks = card->host->max_blk_count;
+305
+306         /*
+307          * After a read error, we redo the request one sector at a time
+308          * in order to accurately determine which sectors can be read
+309          * successfully.
+310          */
+311         if (disable_multi && brq.data.blocks > 1)
+312             brq.data.blocks = 1;
+313
+314         if (brq.data.blocks > 1) {
+315             /* SPI multiblock writes terminate using a special
+316              * token, not a STOP_TRANSMISSION request.
+317              */
+318             if (!mmc_host_is_spi(card->host)
+319                     || rq_data_dir(req) == READ)
+320                 brq.mrq.stop = &brq.stop;
+321             readcmd = MMC_READ_MULTIPLE_BLOCK;
+322             writecmd = MMC_WRITE_MULTIPLE_BLOCK;
+323         } else {
+324             brq.mrq.stop = NULL;
+325             readcmd = MMC_READ_SINGLE_BLOCK;
+326             writecmd = MMC_WRITE_BLOCK;
+327         }
+328
+329         if (rq_data_dir(req) == READ) {
+330             brq.cmd.opcode = readcmd;
+331             brq.data.flags |= MMC_DATA_READ;
+332         } else {
+333             brq.cmd.opcode = writecmd;
+334             brq.data.flags |= MMC_DATA_WRITE;
+335         }
+336
+337         mmc_set_data_timeout(&brq.data, card);
+338
+339         brq.data.sg = mq->sg;
+340         brq.data.sg_len = mmc_queue_map_sg(mq);
+341
+342         /*
+343          * Adjust the sg list so it is the same size as the
+344          * request.
+345          */
+346         if (brq.data.blocks != req->nr_sectors) {
+347             int i, data_size = brq.data.blocks << 9;
+348             struct scatterlist *sg;
+349
+350             for_each_sg(brq.data.sg, sg, brq.data.sg_len, i) {
+351                 data_size -= sg->length;
+352                 if (data_size <= 0) {
+353                     sg->length += data_size;
+354                     i++;
+355                     break;
+356                 }
+357             }
+358             brq.data.sg_len = i;
+359         }
+360
+361         mmc_queue_bounce_pre(mq);
+362
+363         mmc_wait_for_req(card->host, &brq.mrq);
+364
+365         mmc_queue_bounce_post(mq);
+366
+367         /*
+368          * Check for errors here, but don't jump to cmd_err
+369          * until later as we need to wait for the card to leave
+370          * programming mode even when things go wrong.
+371          */
+372         if (brq.cmd.error || brq.data.error || brq.stop.error) {
+373             if (brq.data.blocks > 1 && rq_data_dir(req) == READ) {
+374                 /* Redo read one sector at a time */
+375                 printk(KERN_WARNING "%s: retrying using single "
+376                        "block readn", req->rq_disk->disk_name);
+377                 disable_multi = 1;
+378                 continue;
+379             }
+380             status = get_card_status(card, req);
+381         } else if (disable_multi == 1) {
+382             disable_multi = 0;
+383         }
+384
+385         if (brq.cmd.error) {
+386             printk(KERN_ERR "%s: error %d sending read/write "
+387                    "command, response %#x, card status %#xn",
+388                    req->rq_disk->disk_name, brq.cmd.error,
+389                    brq.cmd.resp[0], status);
+390         }
+391
+392         if (brq.data.error) {
+393             if (brq.data.error == -ETIMEDOUT && brq.mrq.stop)
+394                 /* 'Stop' response contains card status */
+395                 status = brq.mrq.stop->resp[0];
+396             printk(KERN_ERR "%s: error %d transferring data,"
+397                    " sector %u, nr %u, card status %#xn",
+398                    req->rq_disk->disk_name, brq.data.error,
+399                    (unsigned)req->sector,
+400                    (unsigned)req->nr_sectors, status);
+401         }
+402
+403         if (brq.stop.error) {
+404             printk(KERN_ERR "%s: error %d sending stop command, "
+405                    "response %#x, card status %#xn",
+406                    req->rq_disk->disk_name, brq.stop.error,
+407                    brq.stop.resp[0], status);
+408         }
+409
+410         if (!mmc_host_is_spi(card->host) && rq_data_dir(req) != READ) {
+411             do {
+412                 int err;
+413
+414                 cmd.opcode = MMC_SEND_STATUS;
+415                 cmd.arg = card->rca << 16;
+416                 cmd.flags = MMC_RSP_R1 | MMC_CMD_AC;
+417                 err = mmc_wait_for_cmd(card->host, &cmd, 5);
+418                 if (err) {
+419                     printk(KERN_ERR "%s: error %d requesting statusn",
+420                            req->rq_disk->disk_name, err);
+421                     goto cmd_err;
+422                 }
+423                 /*
+424                  * Some cards mishandle the status bits,
+425                  * so make sure to check both the busy
+426                  * indication and the card state.
+427                  */
+428             } while (!(cmd.resp[0] & R1_READY_FOR_DATA) ||
+429                 (R1_CURRENT_STATE(cmd.resp[0]) == 7));
+430
+431 #if 0
+432             if (cmd.resp[0] & ~0x00000900)
+433                 printk(KERN_ERR "%s: status = %08xn",
+434                        req->rq_disk->disk_name, cmd.resp[0]);
+435             if (mmc_decode_status(cmd.resp))
+436                 goto cmd_err;
+437 #endif
+438         }
+439
+440         if (brq.cmd.error || brq.stop.error || brq.data.error) {
+441             if (rq_data_dir(req) == READ) {
+442                 /*
+443                  * After an error, we redo I/O one sector at a
+444                  * time, so we only reach here after trying to
+445                  * read a single sector.
+446                  */
+447                 spin_lock_irq(&md->lock);
+448                 ret = __blk_end_request(req, -EIO, brq.data.blksz);
+449                 spin_unlock_irq(&md->lock);
+450                 continue;
+451             }
+452             goto cmd_err;
+453         }
+454
+455         /*
+456          * A block was successfully transferred.
+457          */
+458         spin_lock_irq(&md->lock);
+459         ret = __blk_end_request(req, 0, brq.data.bytes_xfered);
+460         spin_unlock_irq(&md->lock);
+461     } while (ret);
+462
+463     mmc_release_host(card->host);
+464
+465     return 1;
+466
+467  cmd_err:
+468     /*
+469      * If this is an SD card and we're writing, we can first
+470      * mark the known good sectors as ok.
+471      *
+472      * If the card is not SD, we can still ok written sectors
+473      * as reported by the controller (which might be less than
+474      * the real number of written sectors, but never more).
+475      */
+476     if (mmc_card_sd(card)) {
+477         u32 blocks;
+478
+479         blocks = mmc_sd_num_wr_blocks(card);
+480         if (blocks != (u32)-1) {
+481             spin_lock_irq(&md->lock);
+482             ret = __blk_end_request(req, 0, blocks << 9);
+483             spin_unlock_irq(&md->lock);
+484         }
+485     } else {
+486         spin_lock_irq(&md->lock);
+487         ret = __blk_end_request(req, 0, brq.data.bytes_xfered);
+488         spin_unlock_irq(&md->lock);
+489     }
+490
+491     mmc_release_host(card->host);
+492
+493     spin_lock_irq(&md->lock);
+494     while (ret)
+495         ret = __blk_end_request(req, -EIO, blk_rq_cur_bytes(req));
+496     spin_unlock_irq(&md->lock);
+497
+498     return 0;
+499 }
+278行和491行保证了，当前握有card->host的唯一性。
+280行~360行，根据当前的request，再次组织一个新的block request,通过363行，进行读写。
+186 /**
+187  *  mmc_wait_for_req – start a request and wait for completion
+188  *  @host: MMC host to start command
+189  *  @mrq: MMC request to start
+190  *
+191  *  Start a new MMC custom command request for a host, and wait
+192  *  for the command to complete. Does not attempt to parse the
+193  *  response.
+194  */
+195 void mmc_wait_for_req(struct mmc_host *host, struct mmc_request *mrq)
+196 {
+197     DECLARE_COMPLETION_ONSTACK(complete);
+198
+199     mrq->done_data = &complete;
+200     mrq->done = mmc_wait_done;
+201
+202     mmc_start_request(host, mrq);//maybe have a long time.
+203
+204     wait_for_completion(&complete);//wait until the data completed.the sem also anipulated by interrupt.
+205 }
+186行~205行，是个真正的读写过程。通过complete保证了：只有数据读写完毕，这个函数才返回。否则，将一直等待（等待的过程在204行）。
+123 static void
+124 mmc_start_request(struct mmc_host *host, struct mmc_request *mrq)
+125 {
+126 #ifdef CONFIG_MMC_DEBUG
+127     unsigned int i, sz;
+128     struct scatterlist *sg;
+129 #endif
+130
+131     pr_debug("%s: starting CMD%u arg %08x flags %08xn",
+132          mmc_hostname(host), mrq->cmd->opcode,
+133          mrq->cmd->arg, mrq->cmd->flags);
+134
+135     if (mrq->data) {
+136         pr_debug("%s:     blksz %d blocks %d flags %08x "
+137             "tsac %d ms nsac %dn",
+138             mmc_hostname(host), mrq->data->blksz,
+139             mrq->data->blocks, mrq->data->flags,
+140             mrq->data->timeout_ns / 1000000,
+141             mrq->data->timeout_clks);
+142     }
+143
+144     if (mrq->stop) {
+145         pr_debug("%s:     CMD%u arg %08x flags %08xn",
+146              mmc_hostname(host), mrq->stop->opcode,
+147              mrq->stop->arg, mrq->stop->flags);
+148     }
+149
+150     WARN_ON(!host->claimed);
+151
+152     led_trigger_event(host->led, LED_FULL);
+153
+154     mrq->cmd->error = 0;
+155     mrq->cmd->mrq = mrq;
+156     if (mrq->data) {
+157         BUG_ON(mrq->data->blksz > host->max_blk_size);
+158         BUG_ON(mrq->data->blocks > host->max_blk_count);
+159         BUG_ON(mrq->data->blocks * mrq->data->blksz >
+160             host->max_req_size);
+161
+162 #ifdef CONFIG_MMC_DEBUG
+163         sz = 0;
+164         for_each_sg(mrq->data->sg, sg, mrq->data->sg_len, i)
+165             sz += sg->length;
+166         BUG_ON(sz != mrq->data->blocks * mrq->data->blksz);
+167 #endif
+168
+169         mrq->cmd->data = mrq->data;
+170         mrq->data->error = 0;
+171         mrq->data->mrq = mrq;
+172         if (mrq->stop) {
+173             mrq->data->stop = mrq->stop;
+174             mrq->stop->error = 0;
+175             mrq->stop->mrq = mrq;
+176         }
+177     }
+178     host->ops->request(host, mrq);//对于goldish会调用goldfish_mmc_request
+179 }
+178行注释，调用goldfish_mmc_request进行真正的读写。
+400 static void goldfish_mmc_request(struct mmc_host *mmc, struct mmc_request *req)
+401 {
+402     struct goldfish_mmc_host *host = mmc_priv(mmc);
+403
+404     WARN_ON(host->mrq != NULL);
+405
+406     host->mrq = req;
+407     goldfish_mmc_prepare_data(host, req);//parameters be written and ready
+408     goldfish_mmc_start_command(host, req->cmd);//data been transported
+409
+410     /* this is to avoid accidentally being detected as an SDIO card in mmc_attach_sdio() */
+411     if (req->cmd->opcode == SD_IO_SEND_OP_COND &&
+412         req->cmd->flags == (MMC_RSP_SPI_R4 | MMC_RSP_R4 | MMC_CMD_BCR)) {
+413         req->cmd->error = -EINVAL;
+414     }
+415 }
+第408行，调用goldfish_mmc_request
+156 static void
+157 goldfish_mmc_start_command(struct goldfish_mmc_host *host, struct mmc_command *cmd)
+158 {
+159     u32 cmdreg;
+160     u32 resptype;
+161     u32 cmdtype;
+162
+163     host->cmd = cmd;
+164
+165     resptype = 0;
+166     cmdtype = 0;
+167
+168     /* Our hardware needs to know exact type */
+169     switch (mmc_resp_type(cmd)) {
+170     case MMC_RSP_NONE:
+171         break;
+172     case MMC_RSP_R1:
+173     case MMC_RSP_R1B:
+174         /* resp 1, 1b, 6, 7 */
+175         resptype = 1;
+176         break;
+177     case MMC_RSP_R2:
+178         resptype = 2;
+179         break;
+180     case MMC_RSP_R3:
+181         resptype = 3;
+182         break;
+183     default:
+184         dev_err(mmc_dev(host->mmc), "Invalid response type: %04xn", mmc_resp_type(cmd));
+185         break;
+186     }
+187
+188     if (mmc_cmd_type(cmd) == MMC_CMD_ADTC) {
+189         cmdtype = OMAP_MMC_CMDTYPE_ADTC;
+190     } else if (mmc_cmd_type(cmd) == MMC_CMD_BC) {
+191         cmdtype = OMAP_MMC_CMDTYPE_BC;
+192     } else if (mmc_cmd_type(cmd) == MMC_CMD_BCR) {
+193         cmdtype = OMAP_MMC_CMDTYPE_BCR;
+194     } else {
+195         cmdtype = OMAP_MMC_CMDTYPE_AC;
+196     }
+197
+198     cmdreg = cmd->opcode | (resptype <<  8) | (cmdtype << 12);
+199
+200     if (host->bus_mode == MMC_BUSMODE_OPENDRAIN)
+201         cmdreg |= 1 << 6;
+202
+203     if (cmd->flags & MMC_RSP_BUSY)
+204         cmdreg |= 1 << 11;
+205
+206     if (host->data && !(host->data->flags & MMC_DATA_WRITE))
+207         cmdreg |= 1 << 15;
+208
+209     GOLDFISH_MMC_WRITE(host, MMC_ARG, cmd->arg);
+210     GOLDFISH_MMC_WRITE(host, MMC_CMD, cmdreg);
+211 }
+这个过程可能会等一段时间。
+什么时候，才知道数据读写完毕呢？通过中断。当数据读写完毕后，host会向系统发起一个中断。在中断中，将调用第200行的mmc_wait_done。其中断函数的代码如下：
+291 static irqreturn_t goldfish_mmc_irq(int irq, void *dev_id)
+292 {
+293     struct goldfish_mmc_host * host = (struct goldfish_mmc_host *)dev_id;
+294     u16 status;
+295     int end_command = 0;
+296     int end_transfer = 0;
+297     int transfer_error = 0;
+298     int state_changed = 0;
+299     int cmd_timeout = 0;
+300
+301     while ((status = GOLDFISH_MMC_READ(host, MMC_INT_STATUS)) != 0) {
+302         GOLDFISH_MMC_WRITE(host, MMC_INT_STATUS, status);
+303
+304         if (status & MMC_STAT_END_OF_CMD) {
+305             end_command = 1;
+306         }
+307
+308         if (status & MMC_STAT_END_OF_DATA) {
+309             end_transfer = 1;
+310         }
+311         if (status & MMC_STAT_STATE_CHANGE) {
+312             state_changed = 1;
+313         }
+314
+315         if (status & MMC_STAT_CMD_TIMEOUT) {
+316             end_command = 0;
+317             cmd_timeout = 1;
+318         }
+319     }
+320
+321     if (cmd_timeout) {
+322         struct mmc_request *mrq = host->mrq;
+323         mrq->cmd->error = -ETIMEDOUT;
+324         host->mrq = NULL;
+325         mmc_request_done(host->mmc, mrq);
+326     }
+327
+328     if (end_command) {
+329         goldfish_mmc_cmd_done(host, host->cmd);
+330     }
+331     if (transfer_error)
+332         goldfish_mmc_xfer_done(host, host->data);
+333     else if (end_transfer) {
+334         host->dma_done = 1;
+335         goldfish_mmc_end_of_data(host, host->data);
+336     }
+337     if (state_changed) {
+338         u32 state = GOLDFISH_MMC_READ(host, MMC_STATE);
+339         pr_info("%s: Card detect now %dn", __func__,
+340             (state & MMC_STATE_INSERTED));
+341         mmc_detect_change(host->mmc, 0);
+342     }
+343
+344     if (!end_command && !end_transfer &&
+345         !transfer_error && !state_changed && !cmd_timeout) {
+346         status = GOLDFISH_MMC_READ(host, MMC_INT_STATUS);
+347         dev_info(mmc_dev(host->mmc),"spurious irq 0x%04xn", status);
+348         if (status != 0) {
+349             GOLDFISH_MMC_WRITE(host, MMC_INT_STATUS, status);
+350             GOLDFISH_MMC_WRITE(host, MMC_INT_ENABLE, 0);
+351         }
+352     }
+353
+354     return IRQ_HANDLED;
+355 }
+在第333~336行，如果数据传输完毕后，会执行335行的goldfish_mmc_end_of_data()，注意host->dma_done设置为1，下面的程序会调用到。
+252 static void
+253 goldfish_mmc_end_of_data(struct goldfish_mmc_host *host, struct mmc_data *data)
+254 {
+255     if (!host->dma_in_use) {
+256         goldfish_mmc_xfer_done(host, data);
+257         return;
+258     }
+259     if (host->dma_done)
+260         goldfish_mmc_xfer_done(host, data);
+261 }
+由于之前host->dma_done设置为1，那么执行259~260行。即调用goldfish_mmc_xfer_done
+213 static void
+214 goldfish_mmc_xfer_done(struct goldfish_mmc_host *host, struct mmc_data *data)
+215 {
+216     if (host->dma_in_use) {
+217         enum dma_data_direction dma_data_dir;
+218
+219         if (data->flags & MMC_DATA_WRITE)
+220             dma_data_dir = DMA_TO_DEVICE;
+221         else
+222             dma_data_dir = DMA_FROM_DEVICE;
+223
+224         if (dma_data_dir == DMA_FROM_DEVICE) {
+225             // we don't really have DMA, so we need to copy from our platform driver buffer
+226             uint8_t* dest = (uint8_t *)sg_virt(data->sg);
+227             memcpy(dest, host->virt_base, data->sg->length);
+228         }
+229
+230         host->data->bytes_xfered += data->sg->length;
+231
+232         dma_unmap_sg(mmc_dev(host->mmc), data->sg, host->sg_len, dma_data_dir);
+233     }
+234
+235     host->data = NULL;
+236     host->sg_len = 0;
+237
+238     /* NOTE:  MMC layer will sometimes poll-wait CMD13 next, issuing
+239      * dozens of requests until the card finishes writing data.
+240      * It'd be cheaper to just wait till an EOFB interrupt arrives…
+241      */
+242
+243     if (!data->stop) {
+244         host->mrq = NULL;
+245         mmc_request_done(host->mmc, data->mrq);
+246         return;
+247     }
+248
+249     goldfish_mmc_start_command(host, data->stop);
+250 }
+第245行，调用了mmc_request_done
+69 /**
+70  *  mmc_request_done – finish processing an MMC request
+71  *  @host: MMC host which completed request
+72  *  @mrq: MMC request which request
+73  *
+74  *  MMC drivers should call this function when they have completed
+75  *  their processing of a request.
+76  */
+77 void mmc_request_done(struct mmc_host *host, struct mmc_request *mrq)
+78 {
+79     struct mmc_command *cmd = mrq->cmd;
+80     int err = cmd->error;
+81
+82     if (err && cmd->retries && mmc_host_is_spi(host)) {
+83         if (cmd->resp[0] & R1_SPI_ILLEGAL_COMMAND)
+84             cmd->retries = 0;
+85     }
+86
+87     if (err && cmd->retries) {
+88         pr_debug("%s: req failed (CMD%u): %d, retrying…n",
+89             mmc_hostname(host), cmd->opcode, err);
+90
+91         cmd->retries–;
+92         cmd->error = 0;
+93         host->ops->request(host, mrq);
+94     } else {
+95         led_trigger_event(host->led, LED_OFF);
+96
+97         pr_debug("%s: req done (CMD%u): %d: %08x %08x %08x %08xn",
+98             mmc_hostname(host), cmd->opcode, err,
+99             cmd->resp[0], cmd->resp[1],
+100             cmd->resp[2], cmd->resp[3]);
+101
+102         if (mrq->data) {
+103             pr_debug("%s:     %d bytes transferred: %dn",
+104                 mmc_hostname(host),
+105                 mrq->data->bytes_xfered, mrq->data->error);
+106         }
+107
+108         if (mrq->stop) {
+109             pr_debug("%s:     (CMD%u): %d: %08x %08x %08x %08xn",
+110                 mmc_hostname(host), mrq->stop->opcode,
+111                 mrq->stop->error,
+112                 mrq->stop->resp[0], mrq->stop->resp[1],
+113                 mrq->stop->resp[2], mrq->stop->resp[3]);
+114         }
+115
+116         if (mrq->done)
+117             mrq->done(mrq);
+118     }
+119 }
+最终会调用117行的mrq->done，即mmc_wait_done
+181 static void mmc_wait_done(struct mmc_request *mrq)
+182 {
+183     complete(mrq->done_data);
+184 }
+183行中的mrq->done_data被设置为了&complete(看mmc_wait_for_req)。
+4824 /**
+4825  * complete: – signals a single thread waiting on this completion
+4826  * @x:  holds the state of this particular completion
+4827  *
+4828  * This will wake up a single thread waiting on this completion. Threads will be
+4829  * awakened in the same order in which they were queued.
+4830  *
+4831  * See also complete_all(), wait_for_completion() and related routines.
+4832  */
+4833 void complete(struct completion *x)
+4834 {
+4835     unsigned long flags;
+4836
+4837     spin_lock_irqsave(&x->wait.lock, flags);
+4838     x->done++;
+4839     __wake_up_common(&x->wait, TASK_NORMAL, 1, 0, NULL);
+4840     spin_unlock_irqrestore(&x->wait.lock, flags);
+4841 }
+4842 EXPORT_SYMBOL(complete);
+看4838行，done++后，再调用complete上的进程，这时候，进程就可以结束 wait_for_completion(&complete)了。wait_for_completion代码如下：
+4898 /**
+4899  * wait_for_completion: – waits for completion of a task
+4900  * @x:  holds the state of this particular completion
+4901  *
+4902  * This waits to be signaled for completion of a specific task. It is NOT
+4903  * interruptible and there is no timeout.
+4904  *
+4905  * See also similar routines (i.e. wait_for_completion_timeout()) with timeout
+4906  * and interrupt capability. Also see complete().
+4907  */
+4908 void __sched wait_for_completion(struct completion *x)
+4909 {
+4910     wait_for_common(x, MAX_SCHEDULE_TIMEOUT, TASK_UNINTERRUPTIBLE);
+4911 }
+4912 EXPORT_SYMBOL(wait_for_completion);
+4887 static long __sched
+4888 wait_for_common(struct completion *x, long timeout, int state)
+4889 {
+4890     might_sleep();
+4891
+4892     spin_lock_irq(&x->wait.lock);
+4893     timeout = do_wait_for_common(x, timeout, state);
+4894     spin_unlock_irq(&x->wait.lock);
+4895     return timeout;
+4896 }
+4861 static inline long __sched
+4862 do_wait_for_common(struct completion *x, long timeout, int state)
+4863 {
+4864     if (!x->done) {
+4865         DECLARE_WAITQUEUE(wait, current);
+4866
+4867         wait.flags |= WQ_FLAG_EXCLUSIVE;
+4868         __add_wait_queue_tail(&x->wait, &wait);
+4869         do {
+4870             if (signal_pending_state(state, current)) {
+4871                 timeout = -ERESTARTSYS;
+4872                 break;
+4873             }
+4874             __set_current_state(state);
+4875             spin_unlock_irq(&x->wait.lock);
+4876             timeout = schedule_timeout(timeout);
+4877             spin_lock_irq(&x->wait.lock);
+4878         } while (!x->done && timeout);
+4879         __remove_wait_queue(&x->wait, &wait);
+4880         if (!x->done)
+4881             return timeout;
+4882     }
+4883     x->done–;
+4884     return timeout ?: 1;
+4885 }
+着重看4878行。
+至此，基本上，mmc读写请求的整个过程就分析结束了。
