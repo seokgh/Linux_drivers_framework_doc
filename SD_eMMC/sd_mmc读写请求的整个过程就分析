@@ -3,17 +3,16 @@ linux kernel2.6.29  SD卡读写流程/mmc读写请求的整个过程就分析
 
 Goldfish Platform
 ------------------------------------------------------------
+SD/eMMC卡的读写操作, 同其他块设备一样， 都是异步的过程。
+
 card/queue.c: 
-        mmc_init_queue()
-              --->blk_init_queue(mmc_request_fn, lock)    //绑定请求处理函数。
-                      --->该请求处理函数mmc_request_fn（）唤醒mmc_thread!!!
-                               --->与mmc_thread线程对应的处理函数mmc_queue_thread()执行与MMC对应的 mq->issue(mq,req).
-
-
-SD卡的读写操作,同其他块设备一样，都是异步的过程。
-
-当进程把request发到块设备请求队列后， 在真正读写时，mq->thread进程会被激活。 这个进程准确说属于内核线程，如下：
-
+     mmc_init_queue()
+         --->blk_init_queue(mmc_request_fn, lock)    //绑定请求处理函数。
+                --->该请求处理函数mmc_request_fn（）会唤醒与mmc对应的内核线程来处理请求。
+                         --->与该线程对应的处理函数mmc_queue_thread（）又去执行与MMC对应的 mq->issue(mq,req).
+                               --->对于存储设备而言，mq->issue()函数指针指向driver/mmc/card/block.c中的mmc_blk_issue_rq了。
+                                        
+如下：
 44 static int mmc_queue_thread(void *d)
 45 {
 46     struct mmc_queue *mq = d;
