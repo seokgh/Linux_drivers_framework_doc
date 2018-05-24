@@ -3,7 +3,11 @@ linux kernel2.6.29  SD卡读写流程/mmc读写请求的整个过程就分析
 
 Goldfish Platform
 ------------------------------------------------------------
-SD/eMMC卡的读写操作, 同其他块设备一样， 都是异步的过程。
+//SD/eMMC卡的读写操作, 同其他块设备一样， 都是异步的过程。
+
+//块设备驱动在使用请求队列的场景下，会用blk_init_queue()初始化request_queue,而该函数的第一个参数，就是请求处理函数的指针。
+//request_queue会作为参数传递给调用blk_init_queue()（）时指定的请求处理函数。
+
 
 //card/queue.c
 card/queue.c: 
