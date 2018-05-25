@@ -1,0 +1,66 @@
+EMMC Response
+
+
+所有的Response都是通过CMD线发送给host的，response第一位为0，第二位表示传输方向Device='0'，最后一位始终为1
+
+00xxxxx..xxxxx1
+
+共有五类响应 R1, R1B, R2, R3, R4, R5
+-----------------
+R1:
+-----------------
+Bit position 	47 	46 	[45:40] 	[39:8] 	7 	0
+Width(bits) 	1 	1 	    6 	    32 	  x 	1
+Value 	      0 	0 	    x 	     x 	CRC7 	1
+Description 	Start bit 	Transmission
+bit 	Command
+index 	Device status 	CRC7 	End bit
+
+[45:40]指定响应的命令index
+
+[39:8] 32bits设备状态
+
+-----------------
+R1b
+-----------------
+R1b等于R1，但是有一个额外busy信号，通过DAT0传递。当设备收到这些命令时可能会变为busy
+
+-----------------
+R2
+-----------------
+CID CSD寄存器，响应编码为136bits。CMD2 CMD10命令获取CID, CMD9命令获取CSD。
+
+Bit position
+	135 	134 	[133:128] 	[127:1] 	0
+Width(bits) 	1 	1 	6 	127 	1
+Value 	0 	0 	111111 	x 	1
+Description 	Start bit 	Transmission
+bit 	Check bits 	CID or CSD register(内嵌CRC) 	End bit
+
+-----------------
+R3
+-----------------
+OCR寄存器响应，编码长度为48bits。device 发送OCR寄存器内容作为CMD1的响应。
+
+Bit position
+	47 	46 	[45:40] 	[39:8] 	[7:1] 	0
+Width(bits) 	1 	1 	6 	32 	7 	1
+Value 	0 	0 	111111 	x 	1111111 	1
+Description 	Start bit 	Transmission
+bit 	Check bits 	OCR register 	Check bits 	
+End bit
+
+-----------------
+R4
+-----------------
+CMD39的响应，包含读写的寄存器地址，以及内容。status bit指出操作是否成功。
+
+Bit position
+	47 	46 	[45:40] 	[39:24] 	[23:23] 	[22:16] 	[15:8] 	[7:1] 	0
+Width(bits) 	1 	1 	6 	16 	1 	7 	8 	  	1
+Value 	0 	0 	100111 	x 	x 	x 	x 	  	1
+Description 	Start bit 	Transmission
+bit 	CMD39 	RCA 	status 	Register
+ address 	Read register
+contents 	CRC 	End
+
