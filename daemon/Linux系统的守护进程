@@ -1,0 +1,120 @@
+Linux系统的守护进程(Daemon Process)
+
+介绍守护进程的概念, 结构, 编写守护进程以及报告进程错误状况. 
+
+1. 概念:
+守护进程又称为精灵进程(daemon), 是生存时间比较长的一种进程. 它们常常在系统自举时启动, 仅在系统关闭时才终止. 因为它们没有控制终端, 
+所以说它们是在后台运行的. 
+
+
+先来介绍一些Linux常见的daemon进程:
+init:    它的pid为1, 是系统守护进程, 负责启动系统服务, 这些服务通常自己也拥有守护进程.
+keventd: 为在内核中运行计划执行的函数提供进程上下文.
+kapmd: 对计算机系统中具有的高级电源管理提供支持.
+kswapd: 页面调出守护进程(Pageout Daemon), 它通过将脏页面(Dirty Page)以低速写到磁盘上, 使这些页面在需要时仍然可以回收使用, 这种方式支持虚存子系统.
+bdflush: 当可用内存达到下限时, 将脏缓冲区从缓冲池中冲洗到磁盘上.
+kupdated: 将脏页面冲洗到磁盘上.
+portmap: 提供将RPC(Remote Procedure Call, 远程过程调用)程序号映射到网络端口号的服务.
+syslogd: 提供把系统消息记入日志的接口, 供需要的程序使用. 可以打印到termino也可以写到文件.
+inetd: 侦听系统网络接口, 以便取得来自网络的各种网络服务请求.
+crond: 在指定的日期和时间执行指定的命令. 使定期地执行相关程序得意实现.
+cupsd: 打印假脱机进程, 它处理对系统提出的所有打印请求.
+nfsd, lockd, rpciod: 提供对网络文件系统的支持(Network File System).
+ 
+
+2. 编程规则:
+2.1 首先要调用umask将文件模式创建屏蔽字设置为0.
+
+2.2 调用fork, 然后使父进程退出. 这样做为了实现下面几点:
+    如果该守护进程是作为一条简单shell命令启动的, 那么父进程终止使得shell认为这条命令已经执行完毕.
+    子进程继承了父进程的进程组ID, 但具有一个新的进程ID, 这就保证了子进程不是一个进程组的组长进程. 
+    这对于第三步的setsid调用是不要的前提.
+
+2.3 调用setsid以创建一个新会话, 使得调用进程: 
+    成为新会话的首进程.
+    成为一个新进程组的组长进程.
+    没有控制终端.
+    
+2.4 将当前工作目录更改为根目录. 这是为了防止当前工作目录在mount的文件系统中.
+2.5 关闭不再需要的文件描述符.
+2.6 某些守护进程打开/dev/null适其具有filedes 0 1 2, 使标准输入, 输出, 出错的例程都不会产生任何效果.
+ 
+
+3. 出错记录:
+守护进程是没有控制终端的, 所以不能用简单的perror实现错误报告. 在Linux中, 有一个集中的守护进程出错记录设施, 它就是syslog.
+
+有 3 种方法, 产生日志消息:
+
+3.1 内核例程可以调用log函数. 任何一个用户进程通过读取/dev/klog就可以获得这些信息, 当然你要先打开这个设备.
+3.2 大多数用户进程(守护进程)调用syslog函数产生日志消息.这使消息发送至UNIX域UDP Socket: /dev/log.
+3.3 在此主机上的一个用户进程, 或通过TCP/IP网络连接到此主机上的一个用户进程可将日志消息发向UDP端口514.
+    注意, syslog并不产生这些UDP数据报, 而是要求产生此日志消息的进程进行显示的网络编程.
+
+
+
+
+下面看一下syslog的函数:
+头文件: <syslog.h>
+
+原型:
+void openlog(const char *ident, int option, int facility);
+void syslog(int priority, const char *format, ...);
+void closelog();
+int setlogmask(int maskpri);
+
+返回值: 前日志记录优先级屏蔽值.
+
+说明:
+openlog 调用是可选择的, 如不调用, 在第一次调用syslog时会自动调用openlog
+closelog 调用也是可选择的, 它只关闭曾用于与syslogd守护进程通信的描述符.
+          参数:ident: log会把它加到每则日志消息中, 它一般是程序的名称(如inetd).
+option: 指定位屏蔽选项.LOG_CONS: 若日志消息不能通过UNIX域数据报送至syslogd, 则该消息写至控制台.
+LOG_NDELAY: 立即打开至syslogd的UNIX域数据报socket, 而不等记录第一条消息.
+LOG_NOWAIT: 不等待在将消息记入日志过程中可能创建的子进程. 阻塞了与捕捉SIGCHLD信号的应用程序冲突.
+LOG_ODELAY: 在记录第一条消息之前延迟打开至syslogd的连接.
+LOG_PERROR: 除了将日志消息发送给syslogd外, 还将它写到标准出错.
+LOG_PID: 每条消息都包含进程ID.
+facility: 让配置文件说明, 来自不同设施的消息将以不同的方式进程处理.LOG_AUTH: 授权程序: login, su, getty等.
+LOG_AUTHPRIV: 与LOG_AUTH相同, 但写日志文件时具有权限限制.
+LOG_CRON: cron和at.
+LOG_DAEMON: 系统守护进程: inetd, routed等.
+LOG_FTP: FTP守护进程(ftpd).
+LOG_KERN: 内核产生的消息.
+LOG_LOCAL0-9: 保留由本地使用.
+LOG_LPR: 行打印系统: lpd, lpc等.
+LOG_MAIL: 邮件系统.
+LOG_NEWS: Usenet网络新闻系统.
+LOG_SYSLOG: syslogd守护进程.
+LOG_USER: 来自其他用户进程的消息(默认).
+LOG_UUCP: UUCP系统.
+priority: 这个参数是facility和level的组合, 可以是(由高到低):LOG_EMERG: 紧急状态(系统不可使用).
+LOG_ALERT: 必须立即修复的状态.
+LOG_CRIT: 严重状态.
+LOG_ERR: 出错状态.
+LOG_WARNING: 警告状态.
+LOG_NOTICE: 正常, 但重要的状态.
+LOG_INFO: 信息性消息.
+LOG_DEBUG: 调试消息.
+
+
+
+此外还有一个变体函数:
+#include <syslog.h>
+#include <stdarg.h>
+void vsyslog(int priority, const char *format, va_list arg);
+
+ 
+
+4. 简单实例:
+openlog("lpd", LOG_PID, LOG_LPR);
+syslog(LOG_ERR, "open error for %s: %m", filename);
+
+等同于:
+syslog(LOG_ERR | LOG_LPR, "open error for %s: %m", filename);
+
+不过更推荐用第一种方式, 更规矩, 更清晰.
+
+
+
+
+
