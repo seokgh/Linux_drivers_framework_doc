@@ -19,6 +19,7 @@ struct card_status {
 	int bit_num;
 	char field_name[100];
 	char value[80][60];
+	int index;
 };
 
 struct card_status status_description[] = {
@@ -38,8 +39,8 @@ struct card_status status_description[] = {
 	{20, "CC_ERROR            ",	{"no error", "error",}},
 	
 	{19, "ERROR               ",	{"no error", "error",}},
-	{18, "Obsolete            ",	{"Hosts should ignore this bit",}},
-	{17, "Obsolete            ",	{"Hosts should ignore this bit",}},
+	{18, "Obsolete            ",	{"",}},
+	{17, "Obsolete            ",	{"",}},
 	{16, "CID/CSD_OVERWRITE   ",	{"no error", "error",}},
 	
 	{15, "WP_ERASE_SKIP       ",	{"not protected", "protected",}},
@@ -52,9 +53,9 @@ struct card_status status_description[] = {
 	{6,  "EXCEPTION_EVENT     ",	{"no event", "an exception event has occurred",}},
 	{5,  "APP_CMD             ",	{"disabled", "enable"}},
 	
-	{4,  "Reserved            ",	{"Reserved",}},
-	{3,  "Reserved            ",	{"Reserved for Application Specific commands",}},	/*03~02*/
-	{1,  "Reserved            ",	{"Reserved for Manufacturer Test Mode",}},		/*01~00*/
+	{4,  "Reserved            ",	{"",}},
+	{3,  "Reserved            ",	{"",}},	/*03~02*/
+	{1,  "Reserved            ",	{"",}},	/*01~00*/
 };
 
 static void help(char *np)
@@ -71,8 +72,7 @@ int main(int argc, char **argv)
 {
 	int i;
 	int value = strtoul(argv[2], NULL, 0);
-	printf("-----%d-----\n", value);
-		
+	int index[50] = {0};
 
 	if( argc < 2 || !strcmp(argv[1], "help") || !strcmp(argv[1], "-h") || !strcmp(argv[1], "--help")){
 		help(argv[0]);
@@ -82,8 +82,25 @@ int main(int argc, char **argv)
 	printf("-----%s start-----\n", __func__);
 	for (i=0; i<sizeof(status_description)/sizeof(status_description[0]); i++) {
 		
-		printf("[%s]	[%s]\n",  status_description[i].field_name, status_description[i].value[1]);
-	}	
+		//current_status
+		if ( status_description[i].bit_num == 12) {
+			status_description[i].index = (value >> 9) & 0x0000000F;
+
+			if (status_description[i].index > 9)
+				status_description[i].index = 9;
+				
+		} else {
+			status_description[i].index = (value >> status_description[i].bit_num) & 0x00000001;
+		}
+
+		//obsolete,reserved
+
+
+
+
+		printf("[%s]	[%s]\n",  status_description[i].field_name, status_description[i].value[status_description[i].index]);
+	}
+	
 	printf("-----%s end-----\n", __func__);
 
 	return 0;
