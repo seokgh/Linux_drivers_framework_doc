@@ -1,5 +1,5 @@
 --------------------------------------------------------------
-pinctrl子系统总结
+A.pinctrl子系统总结
 --------------------------------------------------------------
 软件框架:
 1. pinctrl-core
@@ -327,21 +327,30 @@ pinctrl_select_state(pinctrl, turnon_tes)。
 
 
 
+
+
 ------------------
 案例2 -- 一个背光灯device需要使用pwm的输出pin：
 ------------------
-device tree：
-背光系统中要用到gpd2_4这个pin的TOUT_0功能和gpd4_3这个pin的输出功能并输出1，需要在backlight这个node中做以下描述，这两个pin只有一个状态（pwm-on），同样，这个名字也是可以随便起的。bl_pwm_ctrl和bl_pwm_en_ctrl分别是对这两个pin的描述。
+/////////////////////////
+//device tree：
+/////////////////////////
+背光系统中要用到
+gpd2_4 这个pin的TOUT_0功能 和
+gpd4_3 这个pin的输出功能, 并输出1.
+
+需要在backlight这个node中做以下描述:
+这两个pin只有一个状态（pwm-on），同样，这个名字也是可以随便起的;
+bl_pwm_ctrl 和 bl_pwm_en_ctrl 分别是对这两个pin的描述;
 
 backlight {
     ...
     ...
-    pinctrl-names = "pwm-on";
-    pinctrl-0 = <&bl_pwm_ctrl @bl_pwm_en_ctrl>;
+    pinctrl-names = "pwm-on";   //state
+    pinctrl-0 = <&bl_pwm_ctrl @bl_pwm_en_ctrl>;  //它里面就必须要有function和gruop了
 }；
 
 /* 这个和上面一样，就不多说了 */
-
 &bl_pwm_ctrl_pinctrl{                                     //#define bl_pwm_ctrl_pinctrl   pinctrl_2   
 	bl_pwm_ctrl: bl_pwm_ctrl {
 		samsung,pins = bl_pwm_ctrl_pin;           //#define bl_pwm_ctrl_pin	  "gpd2-4"
@@ -351,8 +360,7 @@ backlight {
 	};
 };
 
-这个描述比上面多了个pin-val，因为这个引脚不仅要配置成输出功能，还要输出1，所以pin-val = 1。
-
+下面这个描述，比上面的多了个pin-val，因为这个引脚不但要配置成输出功能，还要输出1，所以pin-val = 1。
 &bl_pwm_en_ctrl_pinctrl{
 	bl_pwm_en_ctrl: bl_pwm_en_ctrl {
 		samsung,pins = bl_pwm_en_ctrl_pin;           //#define bl_pwm_en_ctrl_pin     "gpd4-3"
@@ -363,15 +371,19 @@ backlight {
 	};
 };
 
-driver的操作：
-
-在backlight的driver的probe中：
+/////////////////////////
+//driver的操作：
+/////////////////////////
+在backlight的driver的probe中： 仅需3行，
 
 struct pinctrl * p = devm_pinctrl_get(&pdev->dev);
 struct pinctrl_state * default_state = pinctrl_lookup_state(p, "pwm-on");
 pinctrl_select_state(p, default_state);
 
-执行完以上操作，可以发现gpd2_4引脚被配置成了TOUT_0功能，gpd4_3引脚被配置成为了输出功能，并且输出1（高电平）。
-以上就是pinctrl子系统的应用实例。如果有解释不太正确的地方请指教。
+执行完以上操作，可以发现
+gpd2_4引脚被配置成了TOUT_0功能，
+gpd4_3引脚被配置成为了输出功能，并且输出1（高电平）。
 
---------------------- 
+
+
+以上就是pinctrl子系统的应用实例
