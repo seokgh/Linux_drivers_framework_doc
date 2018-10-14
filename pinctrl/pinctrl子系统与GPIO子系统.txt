@@ -199,9 +199,9 @@ i2c0: i2c@ff650000{
         interrupts = <GIC_SPI 60 IRQ_TYPE_LEVEL_HIGH>;
         #address-cells = <1>;
         #size-cells = <0>;
-        pinctrl-names = "default", "gpio";
-        pinctrl-0 = <&i2c0_sda &i2c0_scl>;   //"default"状态时的 function 和 group
-        pinctrl-1 = <&i2c0_gpio>;            //"gpio"   状态时的 function 和 group
+        pinctrl-names = "default", "gpio";   //持有两个状态
+        pinctrl-0 = <&i2c0_sda &i2c0_scl>;   //第一个状态 "default"状态时的 function 和 group
+        pinctrl-1 = <&i2c0_gpio>;            //第二个状态 "gpio"   状态时的 function 和 group
         gpios = <&gpio0 GPIO_B7 GPIO_ACTIVE_LOW>, <&gpio0 GPIO_C0 GPIO_ACTIVE_LOW>;
         clocks = <&clk_gates10 2>;
         rockchip,check-idle = <1>;
@@ -210,7 +210,7 @@ i2c0: i2c@ff650000{
 
 上面是关于i2c0控制器的DeviceTree配置信息，我们关心的是下面的配置信息：
 
-        pinctrl-names = "default", "gpio";
+        pinctrl-names = "default", "gpio";   
         pinctrl-0 = <&i2c0_sda &i2c0_scl>;
         pinctrl-1 = <&i2c0_gpio>;
 
@@ -258,9 +258,9 @@ xxx这个设备要用到 gpg0_1 这个 pin 的 TE_DECON_INT 功能，并分别�
 
 xxx {
     ....
-    pinctrl-names = "turnon_tes", "turnoff_tes";  //两个状态
-    pinctrl-0 = <&disp_teson>;   //它里面就会有function，group
-    pinctrl-1 = <&disp_tesoff>;  //它里面就会有function，group
+    pinctrl-names = "turnon_tes", "turnoff_tes";  //持有两个状态
+    pinctrl-0 = <&disp_teson>;   //第一个状态的，它里面就会有状态1的function，group
+    pinctrl-1 = <&disp_tesoff>;  //第二个状态的，它里面就会有状态2的function，group
 };
 
 两个重要的属性必须要有：
@@ -346,8 +346,8 @@ bl_pwm_ctrl 和 bl_pwm_en_ctrl 分别是对这两个pin的描述;
 backlight {
     ...
     ...
-    pinctrl-names = "pwm-on";   //state
-    pinctrl-0 = <&bl_pwm_ctrl @bl_pwm_en_ctrl>;  //它里面就必须要有function和gruop了
+    pinctrl-names = "pwm-on";   //此pin，就一个状态
+    pinctrl-0 = <&bl_pwm_ctrl @bl_pwm_en_ctrl>;  //它里面就必须要有此状态时的 function 和 gruop 了
 }；
 
 /* 这个和上面一样，就不多说了 */
