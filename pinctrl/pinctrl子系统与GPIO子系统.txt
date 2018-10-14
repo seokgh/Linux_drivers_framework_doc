@@ -1,0 +1,377 @@
+--------------------------------------------------------------
+pinctrl子系统总结
+--------------------------------------------------------------
+软件框架:
+1. pinctrl-core
+2. pinctrl-driver (最底层，寄存器操作，根据Function，Group...)
+3. pinctrl-client (具体的设备驱动，SPI，UART，WIFI,GPS设备...)
+
+0.概述
+目前市面上的ARM SoC提供了十分丰富的硬件接口，而硬件接口在物理上的表现就是一个个的pin(或者叫做pad, finger等)。
+为了实现丰富的硬件功能，SoC的pin需要实现复用(IOMUX)功能，即单独的pin需要提供不同功能，例如，一个pin既可以作为GPIO，可以也用于i2c的SCL，
+通过pin相关的复用寄存器，来切换不同的功能。
+除此之外，软件还可以通过寄存器配置pin相关的电气特性，例如，上拉/下拉、驱动能力、开漏等。
+
+
+kernel3.x之前的内核，对于pin的功能配置都是通过Board File的配置文件(arch/arm/mach-xxx)来初始化的，这种配置方式比较繁琐，
+十分容易出现问题(例如pin的功能配置冲突)。
+所以kernel 3.x之后，实现了用DTS的板级配置信息来管理的机制，大大改善了对于pin的配置方式，随之一起实现的就是pinctrl子系统。
+
+
+pinctrl子系统，主要负责以下功能：
+1.枚举、命名通过板级DTS配置的所有pin
+2.对pin实现IOMUX功能
+3.配置pin的电器特性，例如，上拉/下拉、驱动能力、开漏等
+
+由此可见，pinctrl子系统地位相当于kernel的pin管理中心，kernel中所有需要pin资源的驱动、子系统都需要通过pinctrl子系统来申请、配置、释放。
+pinctrl子系统十分重要的。
+
+
+
+1. 软件框架
+不同的SoC，其对于pin的配置方式肯定也不同。对此，pinctrl子系统，（其实linux kernel内部很多驱动子系统，都是这种搞法）
+
+1.将pin的管理方式进行了抽象，形成了pinctrl-core抽象层；
+2.将具体SoC的pin controler隔离出去，形成了pinctrl-driver抽象层；
+3.pinctrl-core和pinctrl-driver层通过抽象接口进行通信；
+4.对于各个需要用到pin的具体设备的驱动，pinctrl子系统将其抽象为pinctrl-client（包括以前的GPIO子系统）；
+
+
+通过上面的软件抽象，pinctrl子系统可以很好的应对不同的SoC pin controler的管理需求，可以很好的为不同需要的驱动程序，提供pin的操作服务。
+
+
+问：GPIO子系统与pinctrl子系统的关系？
+答：
+    按理说，kernel中GPIO子系统和 pinctrl子系统的关系应该非常清楚：
+    pinctrl子系统管理SOC的所有管脚，GPIO子系统是这些管脚的用途之一，
+    因此GPIO子系统应该是pinctrl子系统的client(也可叫做backend、consumer),它基于pinctrl subsystem提供的功能，处理GPIO有关的逻辑。 
+
+不过，实际情况却不是这么简单，它们之间有着较为紧密的耦合（看一看kernel中pinctrl和gpio相关的实现就知道了）
+理论上，GPIO子系统作为pinctrl子系统的使用者，其地位应该和普通的设备驱动没有差别，但是由于以下原因导致GPIO子系统与pinctrl子系统的功能出现了耦合：
+
+    1.早在kernel 3.0之前，GPIO子系统就已经出现了，其功能就是管理pin的GPIO功能；
+    2.pinctrl子系统以及DTS机制出现之后，由于GPIO管理的特殊性，并没有将GPIO子系统合并到pinctrl子系统中，
+      而是在pinctrl子系统为GPIO子系统保留了特殊的访问通道，以达到GPIO子系统访问pin的需求；
+
+
+
+1.1. pinctrl-core
+pinctrl-core抽象层主要的功能就是：三种
+    1.为SoC pin Controller drvier提供底层通信接口的能力（向下的interface）
+    2.为Driver提供访问pin的能力，即driver配置pin复用能、配置引脚的电气特性（向上的interface）
+    3.为GPIO子系统提供访问GPIO的能力（也算向上的interface）
+
+对于第一种功能来说，其实pinctrl-core抽象层，完全不会去关心底层的pin存在方式以及如何对其配置。
+那么，pinctrl-core如何完成对底层的pinctrl-driver的控制呢？ 其实很简单，
+pinctrl-core与底层pinctrl-driver是通过pin controller descriptor进行通信的。
+
+该结构定义如下：
+/**
+ * struct pinctrl_desc - pin controller descriptor, register this to pin
+ * control subsystem
+ * @name: name for the pin controller
+ * @pins: an array of pin descriptors describing all the pins handled by
+ *  this pin controller
+ * @npins: number of descriptors in the array, usually just ARRAY_SIZE()
+ *  of the pins field above
+ * @pctlops: pin control operation vtable, to support global concepts like
+ *  grouping of pins, this is optional.
+ * @pmxops: pinmux operations vtable, if you support pinmuxing in your driver
+ * @confops: pin config operations vtable, if you support pin configuration in
+ *  your driver
+ * @owner: module providing the pin controller, used for refcounting
+ */
+struct pinctrl_desc {
+
+                          /*pinctrl-driver属性*/
+    const char *name;
+    const struct pinctrl_pin_desc *pins;                                                                                                                                                                            
+    unsigned int npins;
+
+                          /*pinctrl-drive抽象接口*/
+    const struct pinctrl_ops *pctlops;
+    const struct pinmux_ops  *pmxops;
+    const struct pinconf_ops *confops;
+    struct module *owner;
+};
+
+这个pinctrl_desc就是对底层pinctrl-driver的抽象，其中包括了pinctrl-driver的所有属性，以及其具有的所有能力；
+
+这就是典型的面向对象编程的思想，pinctrl-core将底层的pinctrl-driver抽象为pinctrl_desc对象，具体的某SoC pinctrl-driver便是该对象一个实例。
+pinctrl-core通过该实例，完成对于系统中所有pin的操作。
+
+但是，具体到pinctrl-driver如何完成pin的相关操作，pinctrl-core其实是不关心的。
+
+这就将pinctrl-driver的管理的复杂性进行了隔离，与之通信的唯一方式就是预先定义好的抽象接口。
+这样，不管pinctrl-driver如何变化，只要是按照协议，实例化了pinctrl_desc,那么pinctrl-core就始终可以管理系统所有的pin。
+
+
+
+
+1.2.最底层的pinctrl-driver
+
+pinctrl-driver主要为pinctrl-core提供pin的操作能力。
+对于每个具体的SoC，管理方式肯定不同，所以对应到pinctrl-driver上，其实现方式可能会略有不同，但是，所有的pinctrl-driver都是为了达到同一个目标，
+那就是把系统所有的pin信息，以及对于pin的控制接口，实例化成pinctrl_desc，并将pinctrl_desc注册到pinctrl-core中。
+
+底层的pinctrl-driver对于系统pin的管理是通过 function 和 group 实现的。
+
+下面解释一下function和group的概念，
+解释之前需要提供一下pinctrl的DTS描述，对于DTS不是很熟悉的可以参考DTS相关的文章:
+
+下面的dts来自于Rockchip 3288的pinctrl配置dts，基于这个DTS，介绍一下pinctrl的 function 和 group 的概念：
+/ {  
+pinctrl: pinctrl@ff770000 {
+    compatible = "rockchip,rk3288-pinctrl";
+    reg = <0xff770000 0x140>,
+          <0xff770140 0x80>,
+          <0xff7701c0 0x80>;
+    reg-names = "base", "pull", "drv";
+    #address-cells = <1>; 
+    #size-cells = <1>; 
+    ranges;
+
+    gpio0: gpio0@ff750000 {
+        compatible = "rockchip,rk3288-gpio-bank0";
+        reg =   <0xff750000 0x100>,
+            <0xff730084 0x0c>,
+                <0xff730064 0x0c>,
+            <0xff730070 0x0c>;
+        reg-names = "base", "mux_bank0", "pull_bank0", "drv_bank0";
+        interrupts = <GIC_SPI 81 IRQ_TYPE_LEVEL_HIGH>;
+        clocks = <&clk_gates17 4>;
+
+        gpio-controller;
+        #gpio-cells = <2>; 
+
+        interrupt-controller;
+        #interrupt-cells = <2>; 
+    };
+    ......
+    gpio0_i2c0 {
+        i2c0_sda:i2c0-sda {
+            rockchip,pins = <I2C0PMU_SDA>;
+            rockchip,pull = <VALUE_PULL_DISABLE>;
+            rockchip,drive = <VALUE_DRV_DEFAULT>;
+            //rockchip,tristate = <VALUE_TRI_DEFAULT>;
+        };
+
+        i2c0_scl:i2c0-scl {
+            rockchip,pins = <I2C0PMU_SCL>;
+            rockchip,pull = <VALUE_PULL_DISABLE>;
+            rockchip,drive = <VALUE_DRV_DEFAULT>;
+            //rockchip,tristate = <VALUE_TRI_DEFAULT>;
+        };
+
+        i2c0_gpio: i2c0-gpio {
+            rockchip,pins = <FUNC_TO_GPIO(I2C0PMU_SDA)>, <FUNC_TO_GPIO(I2C0PMU_SCL)>;
+            rockchip,drive = <VALUE_DRV_DEFAULT>;
+        };
+    };
+
+group：
+    所谓的group，如上dts中的i2c0_sda:i2c0-sda，表示一组具有相同功能的pins，
+    在定义pins的同时，还会提供对于每个pin的电气特性的配置，如上下拉电阻、驱动能力等。
+function：
+    所谓的function，如上dts中的gpio0_i2c0，表示一种功能标识。每个function可以包括一个或若干个group。
+    对于每个SOC，function应该是全局唯一的。
+
+
+底层的pinctrl-driver会在驱动的xxxx_probe函数中，将DTS定义的pinctrl关于function和group的配置，转换为pinctrl_desc中的数据属性，
+同时将pinctrl_desc中的对于pin相关操作的回调函数pctlops、pmxops、confops进行初始化，然后将pinctr_desc注册到pinctrl-core中。
+之后，pinctrl-driver所要做的工作就是静静的等待pinctrl-core的Love Call。
+
+至于，pinctrl-driver如何转化pin信息以及pinctrl_desc的抽象接口的具体实现，每个SoC不相同，所以只能去参考每个SOC具体的底层回调函数pctlops、pmxops、confops。。。
+
+
+1.3. pinctrl-client（具体的设备驱动）
+具体到使用系统pin资源的设备驱动程序，pinctrl-core主要为其提供2种能力：
+  1.隶属于本设备的function的配合能力;
+  2.GPIO子系统对于GPIO的配置能力;
+
+  
+  1.2节中描述了pinctrl相关的DTS中的function和group的配置，对于具体的设备驱动，如何使用这些配置信息呢？
+  还是以一个具体设备的DTS配置为例说明问题，DTS配置如下：
+
+i2c0: i2c@ff650000{                                                                                                                                                                                     
+        compatible = "rockchip,rk30-i2c";
+        reg = <0xff650000 0x1000>;
+        interrupts = <GIC_SPI 60 IRQ_TYPE_LEVEL_HIGH>;
+        #address-cells = <1>;
+        #size-cells = <0>;
+        pinctrl-names = "default", "gpio";
+        pinctrl-0 = <&i2c0_sda &i2c0_scl>;   //"default"状态时的 function 和 group
+        pinctrl-1 = <&i2c0_gpio>;            //"gpio"   状态时的 function 和 group
+        gpios = <&gpio0 GPIO_B7 GPIO_ACTIVE_LOW>, <&gpio0 GPIO_C0 GPIO_ACTIVE_LOW>;
+        clocks = <&clk_gates10 2>;
+        rockchip,check-idle = <1>;
+        status = "disabled";
+    };
+
+上面是关于i2c0控制器的DeviceTree配置信息，我们关心的是下面的配置信息：
+
+        pinctrl-names = "default", "gpio";
+        pinctrl-0 = <&i2c0_sda &i2c0_scl>;
+        pinctrl-1 = <&i2c0_gpio>;
+
+pinctrl-names表示i2c0控制器所处的两种状态，称为pin state, 即：default、gpio；
+        其中，pinctrl-0对应于 defaut 状态下 其关心的function 和 group，
+        类似，pinctrl-1对应于 gpio   状态下 其关心的function 和 group。
+
+pinctrl-names所列出的各个状态，与系统电源管理模块的联系比较紧密，
+由于电源管理的需要，系统可能处于不同的工作状态，相应的设备驱动提供pins的不同的工作状态，
+其目的为了降低系统整体功耗，达到省电的需求，这中需求在消费电子产品中尤为重要。
+
+一般情况下，各个xxx-core-driver，例如i2c-core、spi-core会在调用设备驱动程序的probe()初始化函数之前，将设备的工作状态设定为default状态。
+pinctrl-core的consumer.h文件(include/linux/pinctrl/consumer.h)文件提供了配置pin state的接口函数，其原型如下：
+
+extern struct pinctrl * __must_check pinctrl_get(struct device *dev);
+extern void   pinctrl_put(struct pinctrl *p);
+extern struct pinctrl_state * __must_check pinctrl_lookup_state(struct pinctrl *p, const char *name);
+extern int    pinctrl_select_state(struct pinctrl *p, struct pinctrl_state *s);
+extern struct pinctrl * __must_check devm_pinctrl_get(struct device *dev);
+extern void   devm_pinctrl_put(struct pinctrl *p);
+extern int  pinctrl_pm_select_default_state(struct device *dev);
+extern int  pinctrl_pm_select_sleep_state(struct device *dev);
+extern int  pinctrl_pm_select_idle_state(struct device *dev);
+
+对于普通的设备驱动程序来说，一般不会使用到上述的接口，在涉及到电源管理，或者子系统驱动程序(i2c-core、spi-core)可能用到上述接口。
+具体去参考 GPIO 子系统、i2c-core-drvier、spi-core-drive。
+
+
+
+
+----------------------------------------------------------------------------------------------------------------------
+B. pinctrl子系统 应用实例
+----------------------------------------------------------------------------------------------------------------------
+关于pinctrl是什么，为什么要用pinctrl，源码深度剖析就不赘述
+
+下面我介绍一下如何去使用内核中的pinctrl子系统，以device tree设备树为例。
+
+当你需要控制某些pin的时候，你首先要在device tree中去按照pinctrl的规则去描述它，然后才能在具体的Device Driver中去使用它：
+------------------
+案例1：
+------------------
+xxx这个设备要用到 gpg0_1 这个 pin 的 TE_DECON_INT 功能，并分别将这两个状态取了个名字turnon_tes和turnoff_tes. 这个名字是随便起的。
+重点是看 pinctrl-0 和 pinctrl-1，
+根据示例，它们分别引用了disp_teson和disp_tesoff这两个节点（phandle方式）。
+
+xxx {
+    ....
+    pinctrl-names = "turnon_tes", "turnoff_tes";  //两个状态
+    pinctrl-0 = <&disp_teson>;   //它里面就会有function，group
+    pinctrl-1 = <&disp_tesoff>;  //它里面就会有function，group
+};
+
+两个重要的属性必须要有：
+pins 和 pin-function属性，分别是pin的名字，和要把pin配置成什么功能。还有 gpg0 属于pinctrl_2,所以这个地方引用的是pinctrl_2，而不是其他。
+
+&disp_teson_pinctrl {                           //#define disp_teson_pinctrl	pinctrl_2
+    disp_teson: disp_teson {
+        samsung,pins = disp_teson_pin;          //#define disp_teson_pin    "gpg0-1"
+        samsung,pin-function = <disp_teson_con>;//#define disp_teson_con    2 -- 对应0x2 = TEDECON_INT
+    };
+};
+&disp_tesoff_pinctrl {
+    disp_tesoff: disp_tesoff {
+        samsung,pins = disp_tesoff_pin;          //#define disp_teson_pin        "gpg0-1"
+        samsung,pin-function = <disp_tesoff_con>;//#define disp_teson_con         0
+    };
+};
+
+那么driver如何去操作这个pin呢？ 首先需要熟悉几个内核的API：
+
+1. 获取一个pinctrl句柄，参数是dev，是包含这个pin的device结构体，即xxx这个设备的device
+/**
+ * struct devm_pinctrl_get() - Resource managed pinctrl_get()
+ * @dev: the device to obtain the handle for
+ *
+ * If there is a need to explicitly destroy the returned struct pinctrl,
+ * devm_pinctrl_put() should be used, rather than plain pinctrl_put().
+ */
+struct pinctrl *devm_pinctrl_get(struct device *dev)
+
+
+2. 获取这个pin对应pin_state（引脚状态-turnon_tes/turnoff_tes）
+/**
+ * pinctrl_lookup_state() - retrieves a state handle from a pinctrl handle
+ * @p: the pinctrl handle to retrieve the state from
+ * @name: the state name to retrieve
+ */
+struct pinctrl_state *pinctrl_lookup_state(struct pinctrl *p, const char *name)
+
+3. 设置引脚为某个stata -- turnon_tes/turnoff_tes
+/**
+ * pinctrl_select_state() - select/activate/program a pinctrl state to HW
+ * @p: the pinctrl handle for the device that requests configuration
+ * @state: the state handle to select/activate/program
+ */
+int pinctrl_select_state(struct pinctrl *p, struct pinctrl_state *state)
+
+------------------------------------
+具体操作：
+------------------------------------
+/* 获取pin control state holder 的句柄 */
+pinctrl = devm_pinctrl_get(dev);                                     
+
+/* 得到名字为turnon_tes和turnoff_tes的对应的pin state */
+struct pinctrl_state * turnon_tes  = pinctrl_lookup_state(pinctrl, "turnon_tes");     
+struct pinctrl_state * turnoff_tes = pinctrl_lookup_state(pinctrl, "turnoff_tes");
+
+/* 设置名字为turnon_tes这个pinctrl对应引脚（gpg0-1）的pin state，即gpg0_1对应的寄存器位域设置为2 */
+pinctrl_select_state(pinctrl, turnon_tes)。
+
+经过以上操作，gpg_1引脚对应的con寄存器的对应的位域被配置成2，即0x2 = TE_DECON_INT功能。
+
+以此类推，根据此方法也可以设置turnoff_tes的状态。
+
+
+
+------------------
+案例2 -- 一个背光灯device需要使用pwm的输出pin：
+------------------
+device tree：
+背光系统中要用到gpd2_4这个pin的TOUT_0功能和gpd4_3这个pin的输出功能并输出1，需要在backlight这个node中做以下描述，这两个pin只有一个状态（pwm-on），同样，这个名字也是可以随便起的。bl_pwm_ctrl和bl_pwm_en_ctrl分别是对这两个pin的描述。
+
+backlight {
+    ...
+    ...
+    pinctrl-names = "pwm-on";
+    pinctrl-0 = <&bl_pwm_ctrl @bl_pwm_en_ctrl>;
+}；
+
+/* 这个和上面一样，就不多说了 */
+
+&bl_pwm_ctrl_pinctrl{                                     //#define bl_pwm_ctrl_pinctrl   pinctrl_2   
+	bl_pwm_ctrl: bl_pwm_ctrl {
+		samsung,pins = bl_pwm_ctrl_pin;           //#define bl_pwm_ctrl_pin	  "gpd2-4"
+		samsung,pin-function = <bl_pwm_ctrl_con>; //#define bl_pwm_ctrl_con		2
+		samsung,pin-pud = <bl_pwm_ctrl_pull>;     //#define bl_pwm_ctrl_pull		3
+		samsung,pin-drv = <bl_pwm_ctrl_drv>;      //#define bl_pwm_ctrl_drv		0
+	};
+};
+
+这个描述比上面多了个pin-val，因为这个引脚不仅要配置成输出功能，还要输出1，所以pin-val = 1。
+
+&bl_pwm_en_ctrl_pinctrl{
+	bl_pwm_en_ctrl: bl_pwm_en_ctrl {
+		samsung,pins = bl_pwm_en_ctrl_pin;           //#define bl_pwm_en_ctrl_pin     "gpd4-3"
+		samsung,pin-function = <bl_pwm_en_ctrl_con>; //#define bl_pwm_en_ctrl_con      1
+		samsung,pin-val = <1>;
+		samsung,pin-pud = <bl_pwm_en_ctrl_pull>;
+		samsung,pin-drv = <bl_pwm_en_ctrl_drv>;
+	};
+};
+
+driver的操作：
+
+在backlight的driver的probe中：
+
+struct pinctrl * p = devm_pinctrl_get(&pdev->dev);
+struct pinctrl_state * default_state = pinctrl_lookup_state(p, "pwm-on");
+pinctrl_select_state(p, default_state);
+
+执行完以上操作，可以发现gpd2_4引脚被配置成了TOUT_0功能，gpd4_3引脚被配置成为了输出功能，并且输出1（高电平）。
+以上就是pinctrl子系统的应用实例。如果有解释不太正确的地方请指教。
+
+--------------------- 
