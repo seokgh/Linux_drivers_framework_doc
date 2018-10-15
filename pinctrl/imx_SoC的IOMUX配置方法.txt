@@ -1,0 +1,56 @@
+--------------------------------------------------
+imx_SoC的IOMUX配置方法
+--------------------------------------------------
+imx芯片利用IOMUX机制来解决引脚复用的问题，其引脚配置方法也有些复杂，它涉及到的寄存器有3类：
+
+1.PAD控制寄存器
+2.MUX控制寄存器
+3.Select Input控制寄存器
+
+下面以串口UART4_TXD这一引脚为例,来简单说明：
+1.查看原理图：...
+    可以看出UART4_TXD对应芯片的引脚为KEY_COL0
+
+2.查看芯片手册，查找上述三个控制寄存器：
+    以KEY_COL0为索引进行搜索，可以查找到如下信息： ....
+    然后可以观察到KEY_COL0对应的
+    PAD控制寄存器为: SW_PAD_CTL_PAD_KEY_COL0，
+    且ATL4对应UART4_TX_DATA,因此以UART4_TX_DATA为索引再进行搜索：
+
+    观察得到
+    MUX控制寄存器为: IOMUXC_SW_MUX_CTL_PAD_KEY_COL0，
+    SELECT_INPUT控制寄存器为:    IOMUXC_UART4_UART_RX_DATA_SELECT_INPUT
+
+  至此，上述三个控制寄存器查找完成:
+    PAD控制寄存器为: SW_PAD_CTL_PAD_KEY_COL0
+    MUX控制寄存器为: IOMUXC_SW_MUX_CTL_PAD_KEY_COL0，
+    SELECT_INPUT控制寄存器为:    IOMUXC_UART4_UART_RX_DATA_SELECT_INPUT
+
+
+3.源码配置
+  相关源码位置是在arch/arm/boot/dts/imx6dl-pinfunc.h 中，观察配置规则：
+/*
+ * The pin function ID is a tuple of
+ * <mux_reg conf_reg input_reg mux_mode input_val>
+ */
+
+规则为：
+mux_reg：   mux控制寄存器偏移地址
+conf_reg：  pad控制寄存器偏移地址
+input_reg： select_input控制寄存器偏移地址
+mux_mode：  mux模式
+input_val： select_input寄存器值
+
+从上述内容可以得到:
+mux_reg为0x244，
+conf_reg为0x62C，
+input_reg为0x914，
+此外,
+mux_mode可由上图中观察到为:  MUX_MODE 中的ALT4模式，其值为100，即0x4；
+input_val观察到为:   DAISY中的KEY_COL0_ALT4，其值为10，即0x2
+
+综上所述，外部的UART4_TX对应配置 应如下：
+#define MX6QDL_PAD_KEY_COL0__UART4_RX_DATA          0x244 0x62c 0x914 0x4 0x2
+
+
+
