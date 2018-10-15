@@ -1,0 +1,103 @@
+----------------------------------------------
+IOMUX_Controller_(IOMUXC)_O多路复用控制器
+----------------------------------------------
+1.overview
+The IOMUX Controller (IOMUXC), together with the IOMUX, enables the IC to share one pad to several functional blocks.
+IOMUXC和IOMUX使IMX6能够多个功能模块公用一个pad. 共用是通过对pad的输入/输出信号的多路复用技术,来实现的.
+每一个模块需要一个特定的pad设置, 且每一个pad, 有多达8个复用选择(alternative:备选的,其他的. 称为ALT). 这些pad设置通过IOMUXC控制.
+IOMUX由多个基本的IOMUX单元的组合逻辑构成. 每一个基本的IOMUX单元只能处理一个pad的信号复用.
+
+
+
+2.features
+32位软件MUX存器(IOMUXC_SW_MUX_CTL_PAD_<PADNAME> or IOMUXC_SW_MUX_CTL_GRP_<GROUP NAME>)配置8个可选(ALT)多路复用模式位域, 并强制设置pad输入路径(通过SION bit).
+32位软件PAD存器(IOMUXC_SW_PAD_CTL_PAD_<PAD_NAME> or IOMUXC_SW_PAD_CTL_GRP_<GROUP NAME>)对每一个pad配置特定的pad设置.
+14个32位通用寄存器(GPR0 to GPR13), 根据SoC需求用于任何使用
+32位输入选择控制器,用于控制输入路径到一个模块. 当不止一个pad驱动这个模块输入时,每一个SW MUX/PAD CTL IOMUXC寄存器只能处理一个pad或一个pad组.
+
+
+
+3.functional description
+IOMUXC由两个子模块组成:
+IOMUXC_REGISTERS 包含所有的IOMUXC寄存器
+IOMUXC_LOGIC     包含所有IOMUXC组合逻辑(IP接口控制, 地址解码)
+
+
+
+3.1 ALT6 和 ALT7 扩展多路复用模式
+ALT6和ALT7多路复用模式允许系统的任何信号(比如fuse, pad input)重写任何软件配置, 和强制ALT6/ALT7多路复用模式
+它也允许一个IOMUX软件寄存器控制一组pads
+
+
+3.2 SW loopback功能通过设置SION bit
+当IOMUXC_SW_MUX_CTL的SION位被置1他讲忽视模式控制位的输入模式
+
+3.3  Daisy链-多个pads驱动同一个模块的输入引脚
+有些时候, 多个pad可能驱动单个模块的输入引脚
+比如imx6dl中, uart4的输入引脚: UART4_RX_DATA, 它有两个pad可以驱动它, 也就是说有两个pad都可以作为UART4_RX_DATA引脚, 这取决与硬件. 
+在imx6dl手册中搜索UART4_RX_DATA可知, 有这两个pad: CSI0_DAT13, KEY_ROW0可以作为UART4_RX_DATA的输入引脚. 
+
+具体参照原理图, HUD项目中, 原理图中UART4_RX_DATA是接到KEY_ROW0这个pad上了, 所以项目中, KEY_ROW0这个pad作为UART4_RX_DATA输入脚, 
+故要设置IOMUXC_UART4_UART_RX_DATA_SELECT_INPUT[DAISY]=3
+
+
+
+
+如何理解IOMUX多路复用器呢?
+
+a.首先这些IO都是输入输出管脚(pad)
+b.这些管脚可以复用成多个功能(比如GPIO, CCM_CLKO, SPDIF_OUT...)
+c.手册中会以其中的一个功能来命名pad名
+d.然后在IOMUX章节可以找到其他复用的功能
+
+例子:
+节油项目中音频解码器芯片mp7741dq中的EN使能脚是通过AP_EN来控制的, 然后找到AP_EN管脚对应的pad为EIM_D29, 在数据手册IOMUX Controller章节搜索EIM_D29可以看到它可以复用成其他7个功能(IPU1_DI1_PIN15, ECSPI4_SS0, UART2_RTS_B, GPIO3_IO29, IPU1_CSI1_VSYNC, IPU1_DI0_PIN14, EPDC_PWR_WAKE), 只是这里以EIM_D29为pad名, 然后就可以在数据手册中搜索到其他的复用功能
+
+解析uboot下iomux相关宏的使用
+在arm/include/asm/imx-common/iomux-v3.h中, 描述了IOMUX模块相关寄存器的宏
+IOMUX/PAD Bit field definitions
+MUX_CTRL_OFS: 0..11 (12)
+PAD_CTRL_OFS: 12..23 (12)
+SEL_INPUT_OFS: 24..35 (12)
+MUX_MODE + SION: 36..40 (5)
+PAD_CTRL + NO_PAD_CTRL: 41..58 (18)
+SEL_INP: 59..62 (4)
+reserved: 63 (1)
+IOMUX_PAD(pad_ctrl_ofs, mux_ctrl_ofs, mux_mode, sel_input_ofs, sel_input, pad_ctrl) \
+...
+其实这里的宏定义就是要把IOMUX相关的寄存器集中在IOMUX_PAD中, 然后通过相应函数(imx_iomux_v3_setup_multiple_pads)的解析, 把该宏定义好的值写入到到IOMUX相关寄存器中, 这样就实现了设置IO复用功能
+
+一个设置IO复用的例子:
+在board/fresscale/mx6sabresd/mx6sabresd.c中有很多IO复用的例子, 这里举一个
+iomux_v3_cfg_t const yaxon_pads[] = {
+MX6_PAD_GPIO_17__GPIO7_IO12 | MUX_PAD_CTRL(NO_PAD_CTRL),
+};
+
+static void setup_yaxon(void)
+{
+imx_iomux_v3_setup_multiple_pads(yaxon_pads, ARRAY_SIZE(yaxon_pads));
+}
+
+这里首先通过定义yaxon_pads为iomux_v3_cfg_t类型的常量数据, 然后通过imx_iomux_v3_setup_multiple_pads()函数设置IOMUX相关寄存器来设置需要的IO复用
+a.MX6_PAD_GPIO_17__GPIO7_IO12是拼接起来的, 在source insight中搜索GPIO_17__GPIO_IO12, 可以在arch/arm/include/asm/arch-mx6/mx6dl_pins.h中搜到MX6_PAD_DECL(GPIO_17__GPIO7_IO12, 0x5E8, 0x0218, 5, 0x0000, 0, 0)
+b.继续搜索MX6_PAD_DECL, 在arch/arm/include/asm/arch/mx6-pins.h有该宏定义:
+#define MX6_PAD_DECL(name, pco, mc, mm, sio, si, pc) \
+MX6_PAD_DECLARE(MX6_PAD_, name, pco, mc, mm, sio, si, pc)
+c.继续搜索MX6_PAD_DECLARE, 同样在arch/arm/include/asm/arch/mx6-pins.h有该宏定义:
+#define MX6_PAD_DECLARE(prefix, name, pco, mc, mm, sio, si, pc) \
+prefix##name = IOMUX_PAD(pco, mc, mm, sio, si, pc)
+d.继续搜索IOMUX_PAD, 在arm/include/asm/imx-common/iomux-v3.h中
+参照上面内容(解析uboot下iomux相关宏的使用), 所以
+MX6_PAD_GPIO_17__GPIO7_IO12其实就是:
+MX6_PAD_GPIO_17__GPIO7_IO12 = IOMUX_PAD(0x5E8, 0x0218, 5, 0x0000, 0, 0)
+其中, 0x05E8 ---> pad_ctrl_ofs
+0x0218 ---> mux_ctrl_ofs
+5 ---> mux_mode
+0x0000 ---> sel_input_ofs
+0 ---> sel_input
+0 ---> pad_ctrl
+查找imx6dl产品规格书, IOMUX章节
+IOMUXC_SW_MUX_CTL_PAD_GPIO17寄存器可知mux_ctrl_ofs确实为0x218, 我们需要设置为GPIO模式, 即mux_mode为5, 与实际一样
+IOMUXC_SW_PAD_CTL_PAD_GPIO17寄存器可知pad_ctrl_ofs确实为0x5E8, 我们不需要设置pad_ctrl
+我们不需要设置sel_input_ofs, 所以设置它为0
+然后通过分析imx_iomux_v3_multiple_pads()函数把刚刚的这些值写入到对应寄存器里, 这样就设置好我们想要的IO复用模式了
