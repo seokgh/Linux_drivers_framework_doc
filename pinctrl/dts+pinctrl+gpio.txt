@@ -152,14 +152,17 @@ static struct i2c_driver pcf8523_driver = {
 
     i2c和spi驱动还支持一种“别名匹配”的机制，就以pcf8523为例，假设某程序员在设备树中的pcf8523设备节点中写了compatible = "pcf8523";，显然相对于驱动id_table中的"nxp,pcf8523"，他遗漏了nxp字段，但是驱动却仍然可以匹配上，因为别名匹配对compatible中字符串里第二个字段敏感
 
+-----------------------------------------------------------------------------
 4.常见属性的设置与获取
+-----------------------------------------------------------------------------
+当修改或编写驱动时，常常需要修改gpio、时钟、中断等等参数，以前都是在mach-xxx中的device设置的，现在则要在节点里设置，然后驱动用特殊的API来获取.
 
-当修改或编写驱动时，常常需要修改gpio、时钟、中断等等参数，以前都是在mach-xxx中的device设置的，现在则要在节点里设置，然后驱动用特殊的API来获取
-
-    属性的获取常常在probe函数中进行，但是获取属性之前，最重要的是，确定哪个节点触发了驱动。如果一个驱动对应多个节点，那驱动可以通过int of_device_is_compatible(const struct device_node *device, const char *name)来判断当前节点是否包含指定的compatible（兼容性）
-
-gpio的设置与获取
-
+    属性的获取常常在probe函数中进行，但是获取属性之前，最重要的是，确定哪个节点触发了驱动。
+    如果一个驱动对应多个节点，那驱动可以通过
+    int of_device_is_compatible(const struct device_node *device, const char *name)来判断当前节点是否包含指定的compatible（兼容性）
+---------------------------
+4.1 gpio的设置与获取
+---------------------------
 /*imx6dl.dtsi中gpio1控制器的定义节点*/
 gpio1: gpio@0209c000 {
     compatible = "fsl,imx6q-gpio", "fsl,imx35-gpio";
@@ -175,25 +178,35 @@ gpio1: gpio@0209c000 {
 /*imx6qdl-sabreauto.dtsi中某个设备节点*/
 max7310_reset: max7310-reset {
     compatible = "gpio-reset";
-    reset-gpios = <&gpio1 15 1>;
+    reset-gpios = <&gpio1 15 1>;   //2 parameters to &gpio1
     reset-delay-us = <1>;
     #reset-cells = <0>;
 };
 
-一般来说，我们把gpio属性的名字起为xxx-gpios（xxx我们可以随便起），这样驱动才能通过特定API从识别该属性，并转换成具体的gpio号
+一般来说，我们把gpio属性的名字起为xxx-gpios（xxx我们可以随便起: reset-gpios），这样驱动才能通过特定API识别该属性，并转换成具体的gpio号.
 
-    该设备节点中设置了reset-gpios = <&gpio1 15 1>;这格式是什么意思呢？&gpio1 15引用了gpio1节点，故此处含义为gpio1_15这个引脚；最后一个参数1则代表低电平有效，0则为高电平有效。至于gpio1_15具体对应哪个引脚，在imx6的手册上都有详细描述
-    其实最后一个参数（高低电平有效）不是必须的，因为gpio1节点中设置了#gpio-cells = <2>;，所以才有两个参数；某些soc的gpio节点中会设置为#gpio-cells = <1>;，那么可以不写最后一个参数
-    驱动一般通过以下接口获取上面节点中gpio的属性。该函数第一个参数是节点，一般可以在传入probe的参数中间接获得；第二个参数是gpio属性的名字，一定要和节点属性中的xxx-gpios相同；最后一个是编号index，当节点中有n个同名的xxx-gpios时，可以通过它来获取特定的那个gpio，同一节点中gpio同名情况很少存在，所以我们都把index设为0
+    该设备节点中设置了 reset-gpios = <&gpio1 15 1>; 这格式是什么意思呢？
+        &gpio1 15引用了gpio1节点，故此处含义为gpio1_15这个引脚；
+        最后一个参数1,则代表低电平有效，0则为高电平有效。
+        至于gpio1_15具体对应哪个引脚，在imx6的手册上都有详细描述
+        
+    其实最后一个参数（高/低电平有效）不是必须的，因为gpio1节点中设置了#gpio-cells = <2>;，所以才有两个参数；
+    某些soc的gpio节点中,会设置为#gpio-cells = <1>;，那么可以不写最后一个参数.
+    
+    驱动一般通过以下接口,获取上面节点中gpio的属性。该函数
+    第一个参数是节点，一般可以在传入probe的参数中间接获得；
+    第二个参数是gpio属性的名字，一定要和节点属性中的xxx-gpios相同；
+    最后一个是编号index，当节点中有n个同名的xxx-gpios时，可以通过它来获取特定的那个gpio，同一节点中gpio同名情况很少存在，所以我们都把index设为0
 
-gpio = of_get_named_gpio(node, "reset-gpios", index);
+        gpio = of_get_named_gpio(node, "reset-gpios", index);
 
-    在dts和驱动都不关心gpio名字的情况下，也可直接通过以下接口来获取gpio号，这个时候编号index就十分重要了，可以指定拿取节点的第index个gpio属性
 
-gpio = of_get_gpio(node, index);
+    在dts和驱动都不关心gpio名字的情况下，也可直接通过以下接口,来获取gpio号，这个时候编号index就十分重要了，可以指定拿取节点的第index个gpio属性
 
-中断的设置与获取
-
+        gpio = of_get_gpio(node, index);
+---------------------------
+4.2中断的设置与获取
+---------------------------
 假设某设备节点需要一个gpio中断
 
 /*先确定中断所在的组*/
@@ -203,9 +216,9 @@ interrupt-parent = <&gpio6>;
 interrupts = <8 2>;
 
     而在驱动中使用 中断号 =irq_of_parse_and_map(node, index)函数返回值来得到中断号
-
+-----------------------------
 自定义属性的设置与获取
-
+-----------------------------
 所谓的自定义属性，有点类似于老内核中的platform_data，我们在设备节点中可以随意添加自定义属性，比如下面这个节点里面的属性都是我们自己定义的
 
 reg_3p3v: 3p3v {
@@ -216,23 +229,20 @@ reg_3p3v: 3p3v {
     regulator-always-on;
 };
 
-    针对32位整形的属性，比如上面的regulator-min-microvolt，可以利用下面这个API来获取属性值，第一个参数是节点，第二个参数是属性名字，第三个是输出型参数（把读出来的值放进去）
-
-of_property_read_u32(node, "regulator-min-microvolt", &microvolt);
+    针对32位整形的属性，比如上面的regulator-min-microvolt，可以利用下面这个API来获取属性值，
+    第一个参数是节点，第二个参数是属性名字，第三个是输出型参数（把读出来的值放进去）
+    
+    of_property_read_u32(node, "regulator-min-microvolt", &microvolt);
 
     类似的读取数值的API还有：
-
-int of_property_read_u8(const struct device_node *np, const char *propname, u8 *out_value)
-
-int of_property_read_u16(const struct device_node *np, const char *propname, u16 *out_value)
+    int of_property_read_u8(const struct device_node *np, const char *propname, u8 *out_value)
+    int of_property_read_u16(const struct device_node *np, const char *propname, u16 *out_value)
 
     下列API可检查节点中某个属性是否存在，存在则返回true，不存在则返回false
-
-bool of_property_read_bool(const struct device_node *np, const char *propname)
+    bool of_property_read_bool(const struct device_node *np, const char *propname)
 
     当节点中存在字符串时，可以像下面那样读取，比如我们读取前面reg_3p3v节点中的字符串
-
-of_property_read_string(node, "regulator-name", &string)
+    of_property_read_string(node, "regulator-name", &string)
 
     当节点中存在数组时，可以像下面那样读取
 
