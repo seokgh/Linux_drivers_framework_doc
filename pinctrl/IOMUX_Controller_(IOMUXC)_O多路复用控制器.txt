@@ -40,7 +40,7 @@ ALT6和ALT7多路复用模式允许系统的任何信号(比如fuse, pad input)�
 具体参照原理图, HUD项目中, 原理图中UART4_RX_DATA是接到KEY_ROW0这个pad上了, 所以项目中, KEY_ROW0这个pad作为UART4_RX_DATA输入脚, 
 故要设置IOMUXC_UART4_UART_RX_DATA_SELECT_INPUT[DAISY]=3
 
-
+So, 只有_mux_mode = 0时，_select_input_ofs和_select_input才有效，其余时候_select_input_ofs和_select_input 都为0 ?
 
 
 如何理解IOMUX多路复用器呢?
