@@ -148,22 +148,22 @@ pinctrl: pinctrl@ff770000 {
         #interrupt-cells = <2>; 
     };
     ......
-    gpio0_i2c0 {
-        i2c0_sda:i2c0-sda {
+    gpio0_i2c0 {  //<-------------------function
+        i2c0_sda:i2c0-sda {  //<-------------------group
             rockchip,pins = <I2C0PMU_SDA>;
             rockchip,pull = <VALUE_PULL_DISABLE>;
             rockchip,drive = <VALUE_DRV_DEFAULT>;
             //rockchip,tristate = <VALUE_TRI_DEFAULT>;
         };
 
-        i2c0_scl:i2c0-scl {
+        i2c0_scl:i2c0-scl {  //<-------------------group
             rockchip,pins = <I2C0PMU_SCL>;
             rockchip,pull = <VALUE_PULL_DISABLE>;
             rockchip,drive = <VALUE_DRV_DEFAULT>;
             //rockchip,tristate = <VALUE_TRI_DEFAULT>;
         };
 
-        i2c0_gpio: i2c0-gpio {
+        i2c0_gpio: i2c0-gpio {  //<-------------------group
             rockchip,pins = <FUNC_TO_GPIO(I2C0PMU_SDA)>, <FUNC_TO_GPIO(I2C0PMU_SCL)>;
             rockchip,drive = <VALUE_DRV_DEFAULT>;
         };
