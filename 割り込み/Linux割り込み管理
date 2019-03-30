@@ -1,0 +1,205 @@
+-------------------------------------------------------------
+Linuxの割り込み管理(ARM GIC Version2)
+-------------------------------------------------------------
+問：Hardware割り込みが発生した後、ARM CPUは何をやっているのか？
+問：Hardware割り込みが発生した後、Linuxカーネルはどう応答し、その割り込みをどう処理しているのか？
+問：Hardware割り込み番号と、LinuxカーネルのIRQ番号は、どう変換されているのか？
+問：割り込みContextsでは、なぜSleep動作をさせてはいけないのか？
+
+
+
+各CPU社は、割り込みコントローラの設計がそれぞれである：
+	ARM社は、GIC(Generic Interrupt Controller)を、
+	X86系は、APIC(Advanced Programmable Interrupt Controller)を
+
+GIC Version3/4は、最新のGICであり、ARM v8コマンド集をサポートしていて、Cortex A53等で使用中；
+GIC Version2は、少し古いGICであり、ARM v7コマンド集をサポートしていて、Cortex A7/A9等で使用中で、最大8 Coreまでサポート；
+
+GIC2を例で、説明して行く。
+
+-------------------------------------------------------------
+ARM 割り込みコントローラ
+-------------------------------------------------------------
+ARM Vexpress V2P-CA15_CA7は、Cortex A15＋Cortex A7 の2つのCPU群と、GIC 2をサポートしている。
+
++------------------------------------+  
+|                         +------+   |
+|  +---------------+      |      |   |
+|  |  Cortex-A15   |      |      |   |      +---------------+
+|  |               |      |   G  |   |      |               |
+|  |             <-------->   I  |   |      | ペリフェラル  |
+|  |               |      |   C  |   |      |     の        |
+|  +---------------+      |      |   +<---->+  割り込み     |
+|                         |   4  |   |      |               |
+|  +---------------+      |   0  |   |      |               |
+|  |               |      |   0  |   |      |               |
+|  |  Cortex-A7  <-------->      |   |      +---------------+
+|  |               |      |      |   |
+|  +---------------+      |      |   |
+|                         +------+   |
++------------------------------------+
+
+
+-------------------------------------------------------------
+GIC 2は、下記の種類の割り込みをサポートしている：
+-------------------------------------------------------------
+	1.SGI(Software Generated Interrupt)
+		通常はCPU間の通信に使われ、最大16個のSGIまで可。
+		Hardware Interrupt番号は、ID0〜ID15。
+		SGIは、Linux KernelではIPI(Inter-Process Interrupts)として使い、指定されたCPUに割り込む。
+
+	2.PPI(Private Peripheral Interrupt)
+		各CPUのPrivate割り込みであり、最大16個のPPIまで可。
+		Hardware Interrupt番号は、ID16〜ID31。
+		PPIも、指定されたCPUに割り込む。CPUローカルのTimerとか、PPI割り込みを使う。
+
+	3.SPI(Shared Peripheral Interrupt)
+		共用のペリフェラルの割り込み、最大988個のSPIまで可。
+		Hardware Interrupt番号は、ID32〜ID1019。
+
+
+GICは、主に 2 Unit からなっている：仲裁Unit ＋ CPUとのInterface Unit
+
+	仲裁Unitには、割り込みソース毎に状態を持っている：[inactive/pending/active/active and pending]
+
+-------------------------------------------------------------
+GICが、割り込みを検出する流れ：
+-------------------------------------------------------------
+	Step1. とある割り込みを検出できたら、GICはまずその割り込をPending状態に設定する
+
+	Step2. 仲裁Unitは、どのCPUに配達するかを決める
+
+	Step3. 仲裁Unitは、Pending状態の割り込みの中から、優先度が一番高いやつを、そのCPUのInterrupt部分に発送
+
+	Step4. CPUのInterrupt部分では、この割り込みはCPUに発送できるかを判断する。
+		もし優先度が要求に満たされていれば、GICはそのCPUに割り込み申請Signalを発送する。
+
+	Step5. 割り込みExceptionモードに入ったCPUは、GICC_IARレジスタを読んで割り込みに応答する(Kernelの割り込み処理のどこ？)。
+		GICC_IARレジスタは、Hardware Interrupt IDを返す。
+
+		SGI割り込みの場合は、源CPU IDもGICC_IARに含まれる？
+		割り込みIDが分かれば、処理関数も特定できる。
+
+		GICは、GICC_IARレジスタが読められたのを知ってからは、また、次のパターンに分けられる：
+			1.その割り込みがPending状態だったら、Activeに変える
+			2.その割り込みがActive状態だったら、Active and Pendingに変える
+			3.その割り込みがまた発生したら、Active and Pendingに変える
+
+	Step6. CPUが割り込み処理完了たら、必ずEOIRレジスタを書いて、GICにEOI(End Of Interrupt)を通知する必要がある。
+
+
+
+		(
+		ICCIAR: //割り込みアクノリッジレジスタ
+			Pending状態の割り込みで、最も優先度の高い割り込みID番号が「割り込みID番号」に設定される。
+			CPUIDは、SGI（ソフトウェア生成割り込み）以外では、0となる。
+
+		ICCEOIR: //割り込み終了レジスタ
+			ICCIARの内容を書き込むことで、割り込み処理が終了する。
+		)
+		
+
+	
+-------------------------------------------------------------
+Hardware Interrupt ID と Linux Kernelの割り込み番号の変換関係：
+-------------------------------------------------------------
+例えば、とあるARM基板上で、cat /proc/interurpt したら、下記のように出た：
+	...
+	20:      0       GIC 34  timer		//意味：GIC 34は、Hardware Interrupt番号が34、Kernelが配ったIRQ番号は20って言うことである、割り込みは0回発生
+	...
+	38:      0       GIC 47  eth0
+	...
+	45:      76      GIC 37  uart-p1011
+	...
+
+問：　Hardware割り込み番号と、Kernelでの割り込み番号は、どう変換している？
+答：	Driverを書いたことのある人なら、
+		request_irq()
+		request_threaded_irq() に書くIRQ番号は、Kernelの割り込み番号であり、Hardware割り込み番号でないことを知っているはず。
+	
+		//
+		request_threaded_irq(unsigned int irq, irq_handler_t handler,
+				     irq_handler_t thread_fn,
+				     unsigned long flags, const char *name, void *dev);
+
+			irq:	この引数を、Kernelでは、
+				IRQ number/Interrupt Lineと呼び、
+				Linux Kernelが管理している仮想IRQ番号であり、
+				HardwareのInterrupt番号ではない。
+
+			NR_IRQS マクロで最大の割り込みソース数を表す。
+
+
+	上記例のUART割り込みで説明すると：
+		このSoCでは、Uart-p1011デバイスのHardware Interrupt番号が３７であった、
+		これはGICが０〜３１のHardware Interrupt IDを、SGIとPPI用に保留していて、ペリフェラルの割り込み番号は３２から始まるからだ。
+		また、Uart-p1011デバイスが、基板上で５番目ペリフェラルだからであった：
+			
+		----------------------------------------------------------------------------------------------------------
+		GIC割り込み番号	基板上割り込み順序	割り込みソース	Signal		説明
+		----------------------------------------------------------------------------------------------------------
+		0:31		--			MP core		--		CPU coreとGICの内部Private Interrupt
+		32		0			IOFPGA		WDOG0INT	Watchdog Timer
+		33		1			IOFPGA		SWINT		Software interrupt ???
+		34		2			IOFPGA		TIM01INT	Dual Timer 0/1 interrupt
+		35		3			IOFPGA		TIM23INT	Dual Timer 2/3 interrupt
+		36		4			IOFPGA		RTCINTR		Real Timer Clock interrupt
+		37		5			IOFPGA		UART0INTR	UART 0 interrupt		//*
+		38		6			IOFPGA		UART1INTR	UART 1 interrupt
+		...
+
+-----------------------------------------------
+Hardware IRQ -> Kernel IRQ　へ変換する流れ：
+-----------------------------------------------
+[arch/arm/boot/dts/vexpress-v2m.dtsi]
+	motherboard {							//*
+		model = "...";
+		arm,hbi = <0x190>;
+		...
+		compatible = "arm, vexpress,v2m-p1", "simple-bus";
+		...
+		iofpga@700000000 {
+			compatible = "arm,amba-bus", "simple-bus";	//*
+			...
+			v2m_serial0: uart@0900 {
+				compatible = "arm,p1011", "arm, primecell";
+				reg = <0x09000 0x1000>;
+				interrupt = <5>;			//GIC IRQ番号でもない、基板全体上での割り込み番号である。
+				clocks = <&v2m_oscclk2>, <&smbclk>;
+				clock-names = "uartclk", "apb_pclk";
+			}
+		}
+	}
+
+OSが起動して初期化を行う際に、
+customize_machine()関数が、"arm,amba-bus"と"simple-bus" BUS上のDeviceをScanして、Device Treeを該当部分を解析して、
+struct device 構造体の中に入れ、Kernelへ新しいDeviceを追加している：
+
+[customize_machine() --> of_platform_populate() --> of_platform_bus_create() --> of_amba_device_create()]
+
+/drivers/of/platform.c	//kernel v4.20.17
+static struct amba_device *of_amba_device_create(struct device_node *node,
+						 const char *bus_id,
+						 void *platform_data,
+						 struct device *parent)
+{
+	...
+	/* Decode the IRQs and address ranges */
+	for (i = 0; i < AMBA_NR_IRQS; i++)
+		dev->irq[i] = irq_of_parse_and_map(node, i);		//Hardware IRQ ---> Kernel IRQ
+	...
+}
+
+一番重要な関数は、irq_of_parse_and_map()である。
+この関数の戻り値がLinux KernelのIRQ番号であり、このIRQ番号を struct amba_deviceのirq[]に保存している。
+そして、
+
+UARTドライバでの　p1011_probe()　関数では　dev->irq[x] からKernel IRQ番号をGetして、request_irq()/request_threaded_irq()している。
+つまり、ドライバでGetした割り込み番号は、すでに変換済みのKernel IRQ番号である、Hardware IRQ番号じゃない。
+
+
+
+-----------------------------------------------
+irq_of_parse_and_map(node, i);	//Hardware IRQ ---> Kernel IRQ 関数にて、具体的にどう変換したか？
+-----------------------------------------------
+:wq
