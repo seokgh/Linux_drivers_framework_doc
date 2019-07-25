@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="">
+<meta name="author" content="">
+<title>MontaVista - Embedded Linux Solutions for Accelerating Secure IoT, NFV &amp; 5G Deployment: Montavista</title>
+<!-- Favicons-->
+<link rel="shortcut icon" href="/assets/images/favicon.png">
+<link rel="apple-touch-icon" href="/assets/images/apple-touch-icon.png">
+<link rel="apple-touch-icon" sizes="72x72" href="/assets/images/apple-touch-icon-72x72.png">
+<link rel="apple-touch-icon" sizes="114x114" href="/assets/images/apple-touch-icon-114x114.png">
+<!-- Web Fonts-->
+<link href="https://fonts.googleapis.com/css?family=Hind:400,700%7cLora:400i%7cPoppins:500,600,700" rel="stylesheet">
+<!-- Bootstrap core CSS-->
+<link href="/assets/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+<!-- Plugins and Icon Fonts-->
+<link href="/assets/css/plugins.min.css" rel="stylesheet">
+<!-- Template core CSS-->
+<link href="/assets/css/template.min.css" rel="stylesheet">
+<!-- Template custom CSS-->
+<link href="/assets/css/custom.css" rel="stylesheet">
+<link rel="stylesheet" href="/assets/sky-forms/css/sky-forms.css">
+<!--[if lt IE 9]>
+<link rel="stylesheet" href="/assets/sky-forms/css/sky-forms-ie8.css">
+<![endif]-->
+<!-- Scripts-->
+<script src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.11.0/umd/popper.min.js"></script>
+<script src="/assets/bootstrap/js/bootstrap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.6.0/Chart.min.js"></script>
+<script src="http://maps.googleapis.com/maps/api/js?key=AIzaSyA0rANX07hh6ASNKdBr4mZH0KZSqbHYc3Q"></script>
+<script src="/assets/js/plugins.js"></script>
+<script src="/assets/js/charts.js"></script>
+<script src="/assets/js/custom.min.js"></script>
+<!-- Forms --> 
+<script src="/assets/sky-forms/js/jquery.form.min.js"></script> 
+<script src="/assets/sky-forms/js/jquery.validate.min.js"></script> 
+<script src="/assets/sky-forms/js/jquery.maskedinput.min.js"></script> 
+<script src="/assets/sky-forms/js/jquery.modal.js"></script>
+</head>
+
+
+<body>
+
+<!-- Layout-->
+<div class="layout">
+
+<!-- Header-->
+<header class="header header-center undefined">
+  <div class="container-fluid"> 
+
+    <!-- Logos-->
+    <div class="inner-header"><a class="inner-brand" href="https://mvista.com/en/"><img class="brand-dark" src="/uploads/images/global/logo-light.png" alt=""><img class="brand-light" src="/uploads/images/global/logo-light.png" alt=""> 
+      <!-- Or simple text--> 
+      <!-- Core--></a></div>
+    <!-- Navigation-->
+    <div class="inner-navigation collapse">
+         <div style="position: absolute; top: 12px; right: 140px; z-index: 100">
+<style>
+.active_lang {
+filter: brightness(100%) !important;
+/*border:#FF0004 1px solid;*/
+}
+</style>
+
+
+            
+        <a href="https://mvista.com/index.php?ACT=50&amp;lang=en"><img style="filter: brightness(50%);" src="/uploads/images/global/icon_en.png" class="active_lang"/></a> 
+    
+        <a href="https://mvista.com/index.php?ACT=50&amp;lang=jp"><img style="filter: brightness(50%);" src="/uploads/images/global/icon_jp.png" /></a> 
+    
+    
+  </div>
+      <div class="inner-navigation-inline">
+        <div class="inner-nav">
+          <ul>
+            <li class="menu-item-has-children"><a href="#">About</a>
+              <ul class="sub-menu">
+                <li><a href="https://mvista.com/en/about_whatwedo">What We Do</a></li>
+                <li><a href="https://mvista.com/en/about_team">Our Management Team</a></li>
+                <li><a href="https://mvista.com/en/about_press">Press Releases</a></li>
+                <li><a href="https://mvista.com/en/about_careers">Careers</a></li>
+                <li><a href="https://mvista.com/en/about_events">Events</a></li>
+                <li><a href="https://mvista.com/en/about_partners">Partners</a></li>
+                <!-- 
+                <li><a href="https://mvista.com/en/about_consortiums">Consortiums</a></li>
+                -->
+              </ul>
+            </li>
+            <li class="menu-item-has-children"><a href="#">Markets</a>
+              <ul class="sub-menu">
+                <li><a href="https://mvista.com/en/market_solutions">Overview</a></li>
+                
+                <li><a href="https://mvista.com/en/market_solutions/detail/telecom-networking">Telecom/Networking</a></li>
+                
+                <li><a href="https://mvista.com/en/market_solutions/detail/industrial">Industrial</a></li>
+                
+                <li><a href="https://mvista.com/en/market_solutions/detail/military-aerospace">Military/Aerospace</a></li>
+                
+                <li><a href="https://mvista.com/en/market_solutions/detail/medical">Medical</a></li>
+                
+                <li><a href="https://mvista.com/en/market_solutions/detail/iot">Internet of Things (IoT)</a></li>
+                
+                <li><a href="https://mvista.com/en/market_solutions/detail/wireless-5g">Wireless/5G</a></li>
+                
+                <li><a href="https://mvista.com/en/market_solutions/detail/security">Security</a></li>
+                
+              </ul>
+            </li>
+            <li class="menu-item-has-children"><a href="#">Services</a>
+              <ul class="sub-menu">
+                <li><a href="https://mvista.com/en/services">Overview</a></li>
+                
+                <li><a href="https://mvista.com/en/services/detail/product-branch-maintenance">Product Branch Maintenance</a></li>
+                
+                <li><a href="https://mvista.com/en/services/detail/support-programs">Support Programs</a></li>
+                
+                <li><a href="https://mvista.com/en/services/detail/custom-hw-enablement">Custom HW Enablement</a></li>
+                
+                <li><a href="https://mvista.com/en/services/detail/rtos-legacy-migration">RTOS/Legacy Migration</a></li>
+                
+                <li><a href="https://mvista.com/en/services/detail/system-certification">System Certification</a></li>
+                
+                <li><a href="https://mvista.com/en/services/detail/system-tuning-security-configuration-rt-fast-boot-bandwidth">System Tuning</a></li>
+                
+                <li><a href="https://mvista.com/en/services/detail/training">Training</a></li>
+                
+              </ul>
+            </li>
+            <li class="menu-item-has-children"><a href="#">Products</a>
+              <ul class="sub-menu">
+                <li class="menu-item-has-children"><a href="#">Carrier Grade eXpress&nbsp;&nbsp;&nbsp;</a>
+                <ul class="sub-menu">
+                <li><a href="https://mvista.com/en/products">Overview</a></li>
+                
+                <li><a href="https://mvista.com/en/products/detail/cgx-cgl-and-security">CGX CGL and Security</a></li>
+                
+                <li><a href="https://mvista.com/en/products/detail/cgx-iot">CGX IoT</a></li>
+                
+                <li><a href="https://mvista.com/en/products/detail/cgx-virtualization">CGX Virtualization</a></li>
+                
+                <li><a href="https://mvista.com/en/products/detail/cgx-dataplane">CGX Dataplane</a></li>
+                
+                <li><a href="https://mvista.com/en/products/detail/cgx-graphics">CGX Graphics</a></li>
+                
+              </ul>
+                </li>
+                <li><a href="https://mvista.com/en/products_board_support">Board Support</a></li>
+                <li><a href="https://mvista.com/en/products_lifecycle">Lifecycle</a></li>
+                <li><a href="https://mvista.com/en/products_cve">CVEs</a></li>
+              </ul>
+            </li>
+            <li class="menu-item-has-children"><a href="#">Resources</a>
+              <ul class="sub-menu">
+                <li><a href="https://mvista.com/en/resources">Overview</a></li>
+                
+                <li><a href="https://mvista.com/en/resources/cat/C1">Datasheets</a></li>
+                
+                <li><a href="https://mvista.com/en/resources/cat/C3">Videos</a></li>
+                
+                <li><a href="https://mvista.com/en/resources/cat/C2">Whitepapers</a></li>
+                
+                <li><a href="https://mvista.com/en/blog">Blog</a></li>
+              </ul>
+            </li>
+            <li><a href="https://mvista.com/en/contactus">Contact Us</a></li>
+            <li class="d-lg-none"><a href="http://login.mvista.com/" target="_blank">Support Login</a></li>
+            
+            <li class="menu-item-has-children d-lg-none"><a href="#">Language</a>
+            <ul class="sub-menu">
+            
+        <li><a href="https://mvista.com/index.php?ACT=50&amp;lang=en" class="active">English</a></li>
+    
+        <li><a href="https://mvista.com/index.php?ACT=50&amp;lang=jp">Japan</a></li>
+    
+    </ul>
+    </li>
+    
+          </ul>
+        </div>
+      </div>
+    </div>
+    <!-- Extra menu-->
+    <div class="extra-nav">
+      <ul>
+        <li><a href="http://login.mvista.com/" target="_blank"><span>Support Login</span></a></li>
+      </ul>
+    </div>
+    <!-- Mobile menu-->
+    <div class="nav-toggle"><a href="#" data-toggle="collapse" data-target=".inner-navigation"><span class="icon-bar"></span><span class="icon-bar"></span><span class="icon-bar"></span></a></div>
+  </div>
+</header>
+<!-- Header end-->
+<!-- Wrapper-->
+			<div class="wrapper">
+<section class="flexslider kenburns full-height">
+
+					<ul class="slides">
+					 
+						<li class="bg-dark bg-dark-30">
+							<div class="slide-background" style="width: 220vh;" data-background="<a href="https://mvista.com/en/slider/slide1"><img src="https://mvista.com/uploads/slider1.jpg" alt="" class="ing-responsive"></a></div>
+							<div class="container">
+								<div class="row">
+									<div class="col-md-12">
+										<h1 class="h1"><a style="color: #fff;" href="https://mvista.com/en/slider/slide1">Millions to Billions Smart Connected Devices with Linux</a> </h1>
+									 
+										<p>   <p>MontaVista powers the embedded revolution with CGX Internet of Things (IoT) Profile</p></p>
+										<p><a class="btn btn-circle btn-lg btn-brand" href="https://mvista.com/en/market_solutions/detail/wireless-5g">Read More</a></p>
+									</div>
+								</div>
+							</div>
+						</li>
+						   
+						<li class="bg-dark bg-dark-30">
+							<div class="slide-background" style="width: 220vh;" data-background="<a href="https://mvista.com/en/slider/slide2"><img src="https://mvista.com/uploads/slider2.jpg" alt="" class="ing-responsive"></a></div>
+							<div class="container">
+								<div class="row">
+									<div class="col-md-12">
+										<h1 class="h1"><a style="color: #fff;" href="https://mvista.com/en/slider/slide2">Deliver 5G Flexibility Reliabilty Security</a> </h1>
+									 
+										<p>   <p>Helping customers with Carrier Grade Linux and embedded virtualization use cases like Open NFV, C-RAN, vEPC and 5G Wireless</p></p>
+										<p><a class="btn btn-circle btn-lg btn-brand" href="https://mvista.com/en/market_solutions/detail/wireless-5g">Read More</a></p>
+									</div>
+								</div>
+							</div>
+						</li>
+						   
+					</ul>
+				</section>
+
+<section>
+  <div class="container">
+    <div class="row blog-grid ">
+      <div class="col-md-12"> 
+     
+        <div style="border-bottom: 1px solid #e6e5e5;"  class="row blog-grid">
+
+          
+          <div style="padding-top: 60px;" class="col-md-3 post-item"> 
+            <!-- Post-->
+            <article class="post">
+
+<!-- <div class="post-preview"><a href="https://mvista.com/en/products"><img src="" alt="" class="img-responsive img-thumbnail"></a></div> -->
+
+              <div class="post-wrapper">
+                <div class="post-header">
+                  <h5 class="post-title"><a href="https://mvista.com/en/products">CGX 2.6 Datasheet released</a></h5>
+              
+                </div>
+                <div class="post-content">
+                  <p>Our latest Linux product, CGX 2.6 is about to be available - please see the released datasheet.</p>
+                </div>
+                <div class="post-more"><a href="https://mvista.com/en/products">Read More →</a></div>
+              </div>
+            </article>
+            <!-- Post end--> 
+          </div>
+    
+          <div style="padding-top: 60px;" class="col-md-3 post-item"> 
+            <!-- Post-->
+            <article class="post">
+
+<!-- <div class="post-preview"><a href="https://mvista.com/en/market_solutions/detail/military-aerospace"><img src="" alt="" class="img-responsive img-thumbnail"></a></div> -->
+
+              <div class="post-wrapper">
+                <div class="post-header">
+                  <h5 class="post-title"><a href="https://mvista.com/en/market_solutions/detail/military-aerospace">Military-Aerospace Solutions Updated</a></h5>
+              
+                </div>
+                <div class="post-content">
+                  <p>We have enhanced our offering for the Military and Aerospace markets - please read more and get in touch today!</p>
+                </div>
+                <div class="post-more"><a href="https://mvista.com/en/market_solutions/detail/military-aerospace">Read More →</a></div>
+              </div>
+            </article>
+            <!-- Post end--> 
+          </div>
+    
+          <div style="padding-top: 60px;" class="col-md-3 post-item"> 
+            <!-- Post-->
+            <article class="post">
+
+<!-- <div class="post-preview"><a href="https://mvista.com/en/services"><img src="" alt="" class="img-responsive img-thumbnail"></a></div> -->
+
+              <div class="post-wrapper">
+                <div class="post-header">
+                  <h5 class="post-title"><a href="https://mvista.com/en/services">MontaVista New Support Services</a></h5>
+              
+                </div>
+                <div class="post-content">
+                  <p>Please check out our new services for MontaVista Linux and other distributions</p>
+                </div>
+                <div class="post-more"><a href="https://mvista.com/en/services">Read More →</a></div>
+              </div>
+            </article>
+            <!-- Post end--> 
+          </div>
+    
+          <div style="padding-top: 60px;" class="col-md-3 post-item"> 
+            <!-- Post-->
+            <article class="post">
+
+<!-- <div class="post-preview"><a href="https://mvista.com/en/about_press/detail/montavista-software-announces-commercial-support-for-clear-linux-os"><img src="" alt="" class="img-responsive img-thumbnail"></a></div> -->
+
+              <div class="post-wrapper">
+                <div class="post-header">
+                  <h5 class="post-title"><a href="https://mvista.com/en/about_press/detail/montavista-software-announces-commercial-support-for-clear-linux-os">MontaVista Partners with Intel for ClearLinux Support!</a></h5>
+              
+                </div>
+                <div class="post-content">
+                  <p>We&nbsp;annouced&nbsp;an exciting partnership with Intel to support ClearLinux on the long term.</p>
+                </div>
+                <div class="post-more"><a href="https://mvista.com/en/about_press/detail/montavista-software-announces-commercial-support-for-clear-linux-os">Read More →</a></div>
+              </div>
+            </article>
+            <!-- Post end--> 
+          </div>
+    
+
+
+
+        </div>
+
+</div>
+
+    </div>
+  </div>
+</section>
+
+<section class="module">
+					<div class="container">
+						<div class="row blog-grid">
+							<div class="col-md-4 post-item">
+
+								<!-- Post-->
+								<article class="post">
+									<div class="post-preview"><a href="/products"><img src="/uploads/images/global/placeholder1.jpg" alt=""></a></div>
+									<div class="post-wrapper">
+										<div class="post-header">
+											<h2 class="post-title"><a href="/products">MontaVista Products</a></h2>
+											<ul class="post-meta h5">
+												<li>Products & Services</li>
+											</ul>
+										</div>
+										<div class="post-content">
+											<p>Bet on a reliable Carrier Grade OS that makes sense. Too many development tool options,with too few benefits?</p>
+										</div>
+										<div class="post-more"><a href="/products">Read More →</a></div>
+									</div>
+								</article>
+								<!-- Post end-->
+							</div>
+							<div class="col-md-4 post-item">
+
+								<!-- Post-->
+								<article class="post">
+									<div class="post-preview"><a href="/market_solutions"><img src="/uploads/images/global/placeholder3.jpg" alt=""></a></div>
+									<div class="post-wrapper">
+										<div class="post-header">
+											<h2 class="post-title"><a href="/market_solutions">MontaVista Markets</a></h2>
+											<ul class="post-meta h5">
+												<li>See the Benefits of CGE7</li>
+											</ul>
+										</div>
+										<div class="post-content">
+											<p>With over 20+ years of commercial Linux experience for helping our customer develop embedded device, MontaVista offers an unmatched mixture of skill and experience to ensure success.</p>
+										</div>
+										<div class="post-more"><a href="/market_solutions">Read More →</a></div>
+									</div>
+								</article>
+								<!-- Post end-->
+							</div>
+							<div class="col-md-4 post-item">
+
+								<!-- Post-->
+								<article class="post">
+									<div class="post-preview"><a href="/resources"><img src="/uploads/images/global/placeholder2.jpg" alt=""></a></div>
+									<div class="post-wrapper">
+										<div class="post-header">
+											<h2 class="post-title"><a href="/resources">MontaVista Resource Center</a></h2>
+											<ul class="post-meta h5">
+												<li>White Papers, Data Sheets & Videos</li>
+											</ul>
+										</div>
+										<div class="post-content">
+											<p>View White Papers, Data Sheets, Webinars, Videos and much more....</p>
+										</div>
+										<div class="post-more"><a href="/resources">Read More →</a></div>
+									</div>
+								</article>
+								<!-- Post end-->
+							</div>
+						</div>
+					</div>
+				</section>
+				<!-- Clients-->
+				<section class="module-sm module-gray">
+					<div class="container">
+						<div class="row">
+							<div class="col-md-12">
+								<div class="owl-carousel clients-carousel" data-carousel-options="{&quot;items&quot;:&quot;7&quot;}">
+									<div class="client"><img src="/uploads/images/client_logos/nec.png" alt=""></div>
+									<div class="client"><img src="/uploads/images/client_logos/alcatel.png" alt=""></div>
+									<div class="client"><img src="/uploads/images/client_logos/ericsson.png" alt=""></div>
+									<div class="client"><img src="/uploads/images/client_logos/samsung.png" alt=""></div>
+									<div class="client"><img src="/uploads/images/client_logos/cisco.png" alt=""></div>
+									<div class="client"><img src="/uploads/images/client_logos/lg.png" alt=""></div>
+									<div class="client"><img src="/uploads/images/client_logos/stjude.png" alt=""></div>
+         <div class="client"><img src="/uploads/images/client_logos/guidant.png" alt=""></div>
+         <div class="client"><img src="/uploads/images/client_logos/fujitsu.png" alt=""></div>
+         <div class="client"><img src="/uploads/images/client_logos/infinera.png" alt=""></div>
+         <div class="client"><img src="/uploads/images/client_logos/hp.png" alt=""></div>
+         <div class="client"><img src="/uploads/images/client_logos/canon.png" alt=""></div>
+         <div class="client"><img src="/uploads/images/client_logos/siemens.png" alt=""></div>
+         <div class="client"><img src="/uploads/images/client_logos/motorola.png" alt=""></div>
+         <div class="client"><img src="/uploads/images/client_logos/tellabs.png" alt=""></div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</section>
+				<!-- Clients end-->
+
+
+				<!-- Footer-->
+				<footer class="footer">
+					<div class="container">
+						<div class="row">
+						
+						
+							<div class="col-md-12 col-lg-12">
+								<!-- Text widget-->
+									<aside class="widget widget_text" style="margin:20px 0 0px;">
+									<div class="row">
+								
+								
+										<div style="text-align: center; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; font-size: 10px; margin: 0;" class="textwidget col-md-6 col-lg-12" >
+										<p><img src="/uploads/images/global/logo-light.png" alt=""></p>
+										<p>Commercial Embedded Linux solutions for accelerating secure IoT, NFV & 5G Deployment</br>MontaVista Delivers Open Source Platform Ideal for 5G Carrier Grade Telecom Infrastructure, NFV Applications and Embedded Internet of Things (IoT) Devices.</p>
+<p><a class="btn btn-circle btn-xs btn-brand" href="https://mvista.com/en/contactus">Contact Us</a></p>
+									</div>
+									</div>
+								</aside>
+							</div>
+							
+						
+			
+
+						</div>
+					</div>
+					<div class="footer-copyright">
+						<div class="container">
+							<div class="row">
+								<div class="col-md-12" style="text-align: center; font-weight: normal; font-size: 7px; margin: 0;">
+									<div class="text-center"><span class="copyright">© 2019 MontaVista Software, LLC. All Rights Reserved | <a href="https://mvista.com/en/about_privacy">Privacy Policy</a><br>All trademarks, service marks, trade names, trade dress, product names and logos appearing on the site are the property of their respective owners.</span></div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</footer>
+				<!-- Footer end-->
+
+				<a class="scroll-top" href="#top"><i class="fa fa-angle-up"></i></a>
+			</div>
+			<!-- Wrapper end-->
+
+		</div>
+		<!-- Layout end-->
+	</body>
+</html>
