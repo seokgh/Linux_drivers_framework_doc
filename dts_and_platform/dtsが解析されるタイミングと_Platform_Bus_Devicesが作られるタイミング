@@ -1,0 +1,171 @@
+
+1．LinuxのBus、Device、Driver三者の雛形
+    ---"Platform Device"と"Platform Driver"について
+
+2．Device Treeが解析されるタイミング
+    ---解析されてstruct device_node型のTree状網作り、of_rootをheadとして保存し、Platform BusとPlatform Deviceらが作られる　　
+    （解析されたof_rootは、次の各起動段階で使われる: of_get_property をどこどこで読んでいるかを見れば、見える）
+
+3．各Sub SystemのCoreがInstallされる(subsys_initcall等で)
+    ---各Sub System自分の"Bus"を作る:
+         mmc_register_bus()、
+         bus_register(&i2c_bus_type)、
+
+4．各Platform Driver がInstallされたら
+    ---そのデバイス(Controller)の本当の姿(spi_master, i2c_adapter, mmc_host, usb_hcd...)を新規し、"Bus"に登録を行う
+       登録すると、またそのデバイスにぶら下がってるslaveデバイスを探して(of_rootから)、slaveデバイスを新規し、"Bus"登録する
+
+5．各slaveデバイスのDriverがInstallされたら
+    ---各Sub System自分の"Bus"からDeviceを探して、存在したら、そのDriverのProbeを呼んで初期化を行う
+
+
+
+
+
+------------------------------------------------------- 
+LinuxのBus、Device、Driver三者の雛形
+1. "Platform Device"と"Platform Driver"について 
+------------------------------------------------------- 
+Linuxは、仮想とした"Bus"に、DeviceのListと、DriverのListという二つのリストを持たせ、二つのListの中のいずれに、内容が追加されても、
+その仮想BusのMatch関数を読んで、残りのListをScanしに行きます。
+これが、LinuxのいわゆるBus、Device、Driverの雛形であり、Kernelの各Sub Frameworkで使われています。
+
+(もしDriverにmatch方法が提供されていれば、直接それを使う、という作りもあったような気もしますが...)
+
+"Platform"も同じ仕組みです。
+
+仮想したPlatform Busに、Platform DeviceのListと、Platform DriverのListがあり、Platform Deviceが追加される度に、
+Platform Busの.match()関数が呼ばれ、DriverのListから同じ名前のDriverを探し、あったらそのDriverのProbeを呼ぶ。
+Platform Driverが追加される度に、Platform Busの.match()関数が呼ばれ、DriverのListから同じ名前のDriverを探し、あったらそのDriverのProbeを呼ぶ。
+
+通常は、BSPのBoard FileでPlatform Deviceを定義して、そのデバイスのResource(物理アドレスの範囲、IRQs番号など)を記述して、
+platform_add_devices()で登録しておき、
+Platform DriverのProbeで、そのデバイスのResourceをGetして、ioremapするなり、request_irqするなり、そのデバイスの
+本当の姿(一つのデータ構造、動いているKernelでのその物を表す物)を新規する: 
+
+例えば、    
+SPI Controllerの初期化を例として挙げると、    
+Probeの中で、request_irq等をする以外に、spi_master構造体を新規している。
+このspi_masterが、実際に動いているKernelの中でSPI Controllerを代表するものである。  
+
+SD/eMMCコントローラ等も類似であるはずです: 　
+起動順番から言うと
+0.MMC Core層：　　　subsys_initcall(mmc_init); //mmc_bus_type新規、登録.
+1.Host Driver層： xxx_probe() ---> mmc_add_host() --->自分に繋がっているCard Detect、attach(mmc_rescan、mmc_attach_mmc) ?> Card Device Add(mmc_card).
+2.Card Driver層： module_init(mmc_blk_init) ---> Card Driver Add(mmc_driver).
+
+1と2がmmc bus上でペアリングできて、MMC Blockデバイスを新規し始める...
+
+
+
+
+
+xxx Platform DriverのProbeが呼ばれる具体の例：    
+Platform Deviceが追加されるルートで解析しても、    
+Platform Driverが追加されるルートで解析しても良いです。後者で行くと：
+
+platform_driver_register()
+      --->bus_add_driver
+            --->driver_attach(drv)
+                  --->bus_for_each_dev()
+                        --->__driver_attach()
+                              --->driver_match_device(drv, dev)マクロ
+                                    --->return drv->bus->match ? drv->bus->match(dev,drv):1
+
+
+
+------------------------------------------------------- 
+2. Device Treeが解析されるタイミングと、Platform Bus/Devicesが作られるタイミング 
+------------------------------------------------------- 
+start_kernel() 
+    pr_notice("%s", linux_banner) 
+    setup_arch() 
+            mdesc = setup_machine_fdt(__atags_pointer) 
+            mdesc = of_flat_dt_match_machine() 
+            /* sometimes firmware provides buggy data */ 
+            mdesc->dt_fixup() 
+    early_paging_init() 
+            mdesc->init_meminfo() 
+    arm_memblock_init() 
+            mdesc->reserve() 
+    paging_init() 
+            devicemaps_init() 
+    mdesc->map_io() 
+    ... 
+        arm_pm_restart = mdesc->restart 
+    unflatten_device_tree() <====== Device Treeが解析される 
+        if (mdesc->smp_init()) 
+        ... 
+        handle_arch_irq = mdesc->handle_irq 
+        ... 
+        mdesc->init_early() 
+    pr_notice("Kernel command line: %s\n", ...) 
+    init_IRQ() 
+        machine_desc->init_irq() 
+        outer_cache.write_sec = machine_desc->l2c_write_sec 
+    time_init() 
+            machine_desc->init_time() 
+    rest_init() 
+            kernel_thread(kernel_init, ...) 
+                kernel_init() 
+                    do_initcalls() 
+                        customize_machine() 
+                            machine_desc->init_machine() 
+                                            --->of_platform_populate() <====== platform bus/deviceを作る 
+                                                --->of_platform_bus_create(...) 
+                                                   ---> 
+                        // device probing, driver binding 
+                        init_machine_late() 
+                        machine_desc->init_late() 
+
+
+------------------------------------ 
+unflatten_device_tree について 
+------------------------------------ 
+unflatten_device_tree() 
+        --->__unflatten_device_tree(initial_boot_params, &of_root, early_init_dt_alloc_memory_arch) 
+                                            ↑ ↑ ↑ 
+                                         scanするdtb global list memoryを配るfunc 
+
+結論： 
+        DTBを解析して、Kernelの中で、struct device_node型のtree状データ構造を作る？ 
+         
+        dtsでのnodeが、struct device_nodeに該当。dtsがtree状なので、struct device_nodeもtree状に作る. 
+
+詳細： 
+
+    1. dtbを一回目Scan: of_rootが必要なTotal長さ確定して、dt_alloc()している. 
+        (struct device_node/propertyが現れる度にallocするのではなく、まず全ての分のsizeを確定して、一括dt_allocしてる) 
+
+    2．dtbを二回目Scan: tree構築に必要なmemory確保できたので、of_rootをheadとした本番のstruct device_nodeのtreeを構築. 
+
+
+
+------------------------------------ 
+platform bus/devicesが作られるタイミング 
+------------------------------------ 
+of_platform_populate() 
+{ 
+    for_each_child_of_node(root, child) { //root nodeから全list scan. 
+          --->of_platform_bus_create 
+                --->of_platform_device_create_pdata() 
+                    --->of_device_alloc() //platform_deviceが作られ|初期化され|addされる！ 
+    } 
+} 
+
+of_device_alloc(): 
+    1.platform_deviceをalloc、 
+    2.platform_device nodeのinterrupt|memory addressプロパティ等によりplatform_deviceのstruct resourceをalloc、 
+    3.platform_deviceの他のmemberを初期化： 
+                            dev->dev.coherent_dma_mask = DMA_BIT_MASK(32); 
+                            if (!dev->dev.dma_mask) 
+                                dev->dev.dma_mask = &dev->dev.coherent_dma_mask; 
+                            dev->dev.bus = &platform_bus_type; 
+                            dev->dev.platform_data = platform_data; 
+    4.platform_deviceを登録する: 
+                            if (of_device_add(dev) != 0) { 
+                                ... 
+                                platform_device_put(dev); 
+                                ... 
+                            } 
+
