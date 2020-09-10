@@ -28,7 +28,7 @@ ARM Vexpress V2P-CA15_CA7は、Cortex A15＋Cortex A7 の2つのCPU群と、GIC 
 |  |  Cortex-A15   |      |      |   |      +---------------+
 |  |               |      |   G  |   |      |               |
 |  |             <-------->   I  |   |      | ペリフェラル  |
-|  |               |      |   C  |   |      |     の        |
+|  |               |      |   C  |   |      |     からの    |
 |  +---------------+      |      |   +<---->+  割り込み     |
 |                         |   4  |   |      |               |
 |  +---------------+      |   0  |   |      |               |
@@ -39,9 +39,12 @@ ARM Vexpress V2P-CA15_CA7は、Cortex A15＋Cortex A7 の2つのCPU群と、GIC 
 |                         +------+   |
 +------------------------------------+
 
+即ち、
+Peripheral IRQ ---> GIC Distributor（SGI,PPI,SPI irqs） --->  GIC CPU Interface ---> CPU core
+
 
 -------------------------------------------------------------
-GIC 2は、下記の種類の割り込みをサポートしている：
+GIC 2は、下記3種類の割り込みをサポートしている：
 -------------------------------------------------------------
 	1.SGI(Software Generated Interrupt)
 		通常はCPU間の通信に使われ、最大16個のSGIまで可。
@@ -57,10 +60,37 @@ GIC 2は、下記の種類の割り込みをサポートしている：
 		共用のペリフェラルの割り込み、最大988個のSPIまで可。
 		Hardware Interrupt番号は、ID32〜ID1019。
 
+-------------------------------------------------------------
+GICは、主に 2 Unit から構成されてる：
+-------------------------------------------------------------
+	1.Distributor	//仲裁するUnit、
+	2.CPU Interface	//CPUとのInterface Unit
 
-GICは、主に 2 Unit からなっている：仲裁Unit ＋ CPUとのInterface Unit
+	仲裁Unitは、
+		主に割り込みソースの管理を担当してる：優先処理、ブロッキング、プリエンプションなどを。
+		そして、最も優先度の高い割り込みを、CPU Interface に分配します。
+		
+		割り込みソース毎に、状態を持っている：[inactive/pending/active/active and pending]
 
-	仲裁Unitには、割り込みソース毎に状態を持っている：[inactive/pending/active/active and pending]
+		The Distributor provides a programming interface for:
+			Globally enabling the forwarding of interrupts to the CPU interface
+			Enabling or disabling each interrupt
+			Setting the priority level of each interrupt
+			Setting the target processor list of each interrupt
+			Setting each peripheral interrupt to be level-sensitive or edge-triggered
+			If the GIC implements the Security Extensions, setting each interrupt as either Secure or Non-secure
+			Sending a Software-generated interrupt (SGI) to processor
+			Visibility of the state of each interrupt
+			A mechanism for software to set or clear the pending state of a peripheral interrupt
+
+	CPU Interfaceは、
+		CPU interface provides a programming interface for:
+			Enabling the signal of interrupt requests by the CPU interface
+			Acknowledging an interrupt	//割り込みの確認
+			Indicating completion of the processing of an interrupt
+			Setting an interrupt priority mask for the processor
+			Defining the preemption policy for the processor
+			Determining the highest priority pending interrupt for the processor.
 
 -------------------------------------------------------------
 GICが、割り込みを検出する流れ：
@@ -99,7 +129,7 @@ GICが、割り込みを検出する流れ：
 		)
 		
 
-	
+
 -------------------------------------------------------------
 Hardware Interrupt ID と Linux Kernelの割り込み番号の変換関係：
 -------------------------------------------------------------
