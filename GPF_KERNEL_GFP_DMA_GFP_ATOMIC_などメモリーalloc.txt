@@ -1,9 +1,10 @@
 物理メモリは、ページ単位（4KBのPage Frame単位）で管理しているが、
 カーネル内のデータ構造は、4KBにぴったり嵌らない。
 
-Linux で[ページ単位ではない]単位で、メモリを確保/開放できるには、次のような方法がある:
+Linux で[ページ単位ではない]単位で、メモリを確保/開放できるには、次の方法がある:
 1. kmalloc(), kfree()系
 2. スラブ アロケータ(slab allocator)
+
 
 kmalloc(size_t size, gfp_t flags)　系のapiの引数flagsには、三つの意味がある:
   動作修飾子:   kernelが、必要なmemoryを、どう配るのか
@@ -20,11 +21,12 @@ kmalloc(size_t size, gfp_t flags)　系のapiの引数flagsには、三つの意
     kfree()
     
     vmalloc()           //sleep可能なので、割り込みハンドラーにて、使っては行けない。仮想メモリは連続しているが、物理メモリ上は連続しない。サイズ制限なし。
+    　　　　　　　　　　　　//big memory alloc可なので、insmodコマンドで、.ko driverをロードするする時など、ここを使う。
     vfree()             //sleep可能なので、割り込みハンドラーにて、使っては行けない。
     
-    get_zeroed_page()	//
-    __get_free_page()	//page単位
-    __get_free_pages()	//page単位
+    get_zeroed_page()	//page単位? 未検証
+    __get_free_page()	//page単位? 未検証
+    __get_free_pages()	//page単位? 未検証
     
     devm_kzalloc()      //devが無くなると、そのdevのResourceとして、allocしたメモリも自動でfreeされる
     ...
@@ -53,8 +55,7 @@ include/linux/gfp.h にて定義。
 #define GFP_MOVABLE_MASK (__GFP_RECLAIMABLE|__GFP_MOVABLE)
 #define GFP_MOVABLE_SHIFT 3
 
-
-
+意味:
 GFP_ATOMIC    　 高優先度。スリープ不可。割込みハンドラや下半分(bottom half)で使う。
 GFP_NOIO	 スリープ可、入出力不可。
 GFP_NOFS	 スリープ化、入出力可、ファイル操作不可。ファイルシステムの実装で使う(他のファイルシステムの操作を開始しない)。
