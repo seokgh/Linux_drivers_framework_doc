@@ -1,33 +1,38 @@
-物理メモリは、ページ単位（4KBのページフレーム単位）で管理している。
-しかし、カーネル内のデータ構造は、4KB にぴったり嵌らない。
+物理メモリは、ページ単位（4KBのPage Frame単位）で管理しているが、
+カーネル内のデータ構造は、4KBにぴったり嵌らない。
 
---------------------------------------
-Linux でページ単位ではない単位で、メモリを確保/開放できるには、次の ような方法がある:
---------------------------------------
-1.kmalloc/kfreeと似たkernel api:
-    kmalloc(size_t size, gfp_t flags)
-    kfree(),
-    get_zeroed_page();
-    __get_free_page();
-    __get_free_pages();
-    devm_kzalloc(); //devが無くなると、そのdevのResourceとして、allocしたメモリも自動でfreeされる。
-    vmalloc()
-    vfree()
-    ...
-    
-2.スラブ アロケータ(slab allocator)
-    slab
-    
---------------------------------------
-gpf_t flags:
---------------------------------------
-flagは、三つに分かれる:
+Linux で[ページ単位ではない]単位で、メモリを確保/開放できるには、次のような方法がある:
+1. kmalloc(), kfree()系
+2. スラブ アロケータ(slab allocator)
+
+kmalloc(size_t size, gfp_t flags)　系のapiの引数flagsには、三つの意味がある:
   動作修飾子:   kernelが、必要なmemoryを、どう配るのか
   ZONE修飾子:  kernelが、必要なmemoryを、どこから配るのか
-  TYPE:
+  TYPE:　何だっけ？
 
 --------------------------------------------------------------------------------
-include/linux/gfp.h にて定義
+1.kmalloc()の親戚list:
+--------------------------------------------------------------------------------
+    kmalloc(size_t size, gfp_t flags)
+    			//申請したメモリは、物理メモリマッピング領域にあり、物理メモリ上で連続している(なので、仮想メモリも連続している)。
+			//また、本当の物理メモリアドレスと、固定のoffsetを持つので、変換関係がシンプルである。
+			//それで、allocする仮想メモリのには、サイズ制限がある: 128KBまで
+    kfree()
+    
+    vmalloc()           //sleep可能なので、割り込みハンドラーにて、使っては行けない。仮想メモリは連続しているが、物理メモリ上は連続しない。サイズ制限なし。
+    vfree()             //sleep可能なので、割り込みハンドラーにて、使っては行けない。
+    
+    get_zeroed_page()	//
+    __get_free_page()	//page単位
+    __get_free_pages()	//page単位
+    
+    devm_kzalloc()      //devが無くなると、そのdevのResourceとして、allocしたメモリも自動でfreeされる
+    ...
+
+--------------------------------------
+引数のflag:
+--------------------------------------
+include/linux/gfp.h にて定義。
 
 #define GFP_ATOMIC	(__GFP_HIGH|__GFP_ATOMIC|__GFP_KSWAPD_RECLAIM)
 #define GFP_KERNEL	(__GFP_RECLAIM | __GFP_IO | __GFP_FS)
@@ -47,19 +52,28 @@ include/linux/gfp.h にて定義
 /* Convert GFP flags to their corresponding migrate type */
 #define GFP_MOVABLE_MASK (__GFP_RECLAIMABLE|__GFP_MOVABLE)
 #define GFP_MOVABLE_SHIFT 3
---------------------------------------------------------------------------------
+
+
+
 GFP_ATOMIC    　 高優先度。スリープ不可。割込みハンドラや下半分(bottom half)で使う。
-GFP_NOIO	      スリープ可、入出力不可。
-GFP_NOFS	      スリープ化、入出力可、ファイル操作不可。ファイルシステムの実装で使う(他のファイルシステムの操作を開始しない)。
-GFP_KERNEL	    カーネルにて、一番よく使うallocの方法。メモリが無い時、スリープ可。
-GFP_USER	      ユーザ空間用のメモリの通常の方法。スリープ可。
-GFP_HIGHUSER	  HIGHMEMゾーンからの割当て。スリープ可。
-GFP_DMA         DMAゾーンからの割当て。連続した物理メモリalloc。デバイス・ドライバ等が使う。
+GFP_NOIO	 スリープ可、入出力不可。
+GFP_NOFS	 スリープ化、入出力可、ファイル操作不可。ファイルシステムの実装で使う(他のファイルシステムの操作を開始しない)。
+GFP_KERNEL	 カーネルにて、一番よく使うallocの方法。メモリが無い時、スリープ可。
+GFP_USER	 ユーザ空間用のメモリの通常の方法。スリープ可。
+GFP_HIGHUSER	 HIGHMEMゾーンからの割当て。スリープ可。
+GFP_DMA          DMAゾーンからの割当て。連続した物理メモリalloc。デバイス・ドライバ等が使う。
+
+
+GPF_KERNELを例として見ると、
+#define GFP_KERNEL　　(__GFP_WAIT | __GFP_IO | __GFP_FS)
+　　__GFP_WAIT: メモリpageが足りない時に、sleep可;
+　　__GFP_IO:   DISK IO許可;
+　　__GFP_FS:   FS IO許可;
 
 
 --------------------------------------------------------------------------------
-#define GFP_KERNEL(__GFP_WAIT | __GFP_IO | __GFP_FS)
-__GFP_WAIT: メモリpageが足りない時に、sleep可;
-__GFP_IO:   DISK IO許可;
-__GFP_FS:   FS IO許可;
+2.スラブ アロケータ(slab allocator)
+--------------------------------------------------------------------------------
+    slab...
+
 
