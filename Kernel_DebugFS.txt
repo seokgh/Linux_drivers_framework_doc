@@ -1,4 +1,4 @@
-linux内核 DebugFS
+linux内核DebugFS
 
 一、简介
 
@@ -17,8 +17,7 @@ mount -t debugfs none /sys/kernel/debug
 要使用debugfs，首先我们要设置一下配置选项CONFIG_DEBUG_FS，可以在config文件中设置CONFIG_DEBUG_FS=y，也可以通过menuconfig来设置
 
 Kernelhacking --->
-
-                          [*]Debug Filesystem
+                  [*]Debug Filesystem
 
 并且驱动中使用debugfs需要包含头文件<linux/debugfs.h>，为了在用户态下使用debugfs，必须把它mount到一个目录下
 
@@ -49,7 +48,7 @@ debugfs
 |--mydebug
    |--subdir
       c
-[cpp] view plain copy
+
 
     static int c_open(struct inode *inode, struct file *filp)  
     {  
@@ -102,9 +101,12 @@ debugfs
 
 3)voiddebugfs_remove(structdentry *dentry);
 4)voiddebugfs_remove_recursive(structdentry *dentry);
+
 在module_exit中，我们要释放创建的数据
 debugfs_remove_recursive(my_debugfs_root);
 这个函数可以帮我们逐步移除每个分配的dentry，如果你想要一个个手动移除，也可以直接调用debugfs_remove
+
+
 
 2、创建单值文件
 1)structdentry *debugfs_create_u8(constchar*name, mode_t mode,structdentry *parent, u8 *value);
@@ -118,7 +120,8 @@ debugfs
 2)structdentry *debugfs_create_u16(constchar*name, mode_t mode,structdentry *parent, u16 *value);
 3)structdentry *debugfs_create_u32(constchar*name, mode_t mode,structdentry *parent, u32 *value);
 4)structdentry *debugfs_create_u64(constchar*name, mode_t mode,structdentry *parent, u64 *value);
-其中，后缀为x8、x16、x32的这三个函数是指debugfs中的数据用十六进制表示。 
+  其中，后缀为x8、x16、x32的这三个函数是指debugfs中的数据用十六进制表示。 
+
 5)structdentry *debugfs_create_x8(constchar*name, mode_t mode,structdentry *parent, u8 *value);
 6)structdentry *debugfs_create_x16(constchar*name, mode_t mode,structdentry *parent, u16 *value);
 7)structdentry *debugfs_create_x32(constchar*name, mode_t mode,structdentry *parent, u32 *value);
@@ -148,18 +151,13 @@ debugfs
 structdentry *debugfs_rename(structdentry *old_dir,structdentry *old_dentry,structdentry *new_dir,constchar*new_name);
 structdentry *debugfs_create_symlink(constchar*name,structdentry *parent,constchar*target);
 
-以上部分转自：http://www.cnblogs.com/wwang/archive/2011/01/17/1937609.html
 
 
 三、实例
 这个实例虽然简单，但是融合了如何在debugfs目录下创建文件，并给出了文件的操作方法；
 也说明了如何创建变量文件，并且用户空间读写这个变量文件相当于是在读写内核空间的这个文件对应的变量
-[cpp] view plain copy
 
     // dbgfs.c   
-    /* 
-     * (C) 05-07-2012 Yang Honggang (Joseph), Dslab <eagle.rtlinux@gmail.com> 
-     */  
     #include <linux/debugfs.h>  
     #include <linux/module.h>  
     #include <linux/mm.h>  
@@ -210,7 +208,7 @@ structdentry *debugfs_create_symlink(constchar*name,structdentry *parent,constch
         if (!parent)   
         return -1;     
       
-    //在debugfs目录下创建变量名tracing_on，对应内核中的变量tr_on  
+        //在debugfs目录下创建变量名tracing_on，对应内核中的变量tr_on  
         /* Create a output switch in dbgfs_demon */  
         sw = debugfs_create_bool("tracing_on", S_IRWXU,parent, &tr_on);   
         if (!sw)  
@@ -225,8 +223,8 @@ structdentry *debugfs_create_symlink(constchar*name,structdentry *parent,constch
         if (!pg)  
         goto p_out;  
       
-    //在debugfs目录下创建文件名data，对应的文件操作为fops里面的read和write方法，  
-    //通过read函数中从用户空间传来的buf进行相应的处理。  
+        //在debugfs目录下创建文件名data，对应的文件操作为fops里面的read和write方法，  
+        //通过read函数中从用户空间传来的buf进行相应的处理。  
         inf = debugfs_create_file("data", S_IRUSR,parent, &mds, &fops);  
         if (!inf)  
         goto sw_out;  
@@ -261,10 +259,10 @@ structdentry *debugfs_create_symlink(constchar*name,structdentry *parent,constch
     MODULE_LICENSE("GPL");    
     MODULE_AUTHOR("Yang Honggang (Joseph) <eagle.rtlinux@gmail.com>");  
 
-模块会在/sys/kernel/debugfs根目录下创建
+此module会在/sys/kernel/debugfs根目录下创建
 dbgfs_demon/
-|--data
-|--tracing_on
+    |--data
+    |--tracing_on
 函数的操作逻辑是，如果tracing_on的值为Y，那么可以从文件data中读出有用的调试信息，
 如果为N，那么读data操作将不会返回任何数据。
 
