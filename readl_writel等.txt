@@ -1,0 +1,16 @@
+ioremap()                 //PAGE_SIZE
+iounmap()
+devm_ioremap_resource()   //
+
+__raw_readl(addr)         //仮想アドレスから、4byte値を読む
+readl(addr)               //上と一緒
+
+__raw_writel(data, addr)  //仮想アドレスへ、4byte値を書く
+writel(data, addr);       //上と一緒
+
+
+readw(unsigned int addr)                          //仮想アドレスから、2byte値を読む
+writew(unsigned short data, unsigned int addr);   //仮想アドレスへ、2byte値を書く
+
+readb(unsigned int addr);                         //仮想アドレスから、2byte値を読む
+writeb(unsigned char data, unsigned int addr);    //仮想アドレスへ、2byte値を書く
