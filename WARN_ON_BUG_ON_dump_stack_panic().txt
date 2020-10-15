@@ -1,0 +1,32 @@
+WARN()                    //
+    if (WARN(!np, "unable to setup watchdog restart"))
+		    return;           //returnしているので、WARN_ON()と同じく、再起動は起こさないだろ。
+    
+WARN_ON()
+                          //現在のCPU Coreのcall stackを出力するだけ(dump_stack()を呼ぶ)。Oopsを起こさないので、再起動はしない。                          
+    ret = davinci_set_pllrate(pll, prediv, mult, postdiv);
+	  if (WARN_ON(ret))
+		    return ret;
+    
+BUG_ON()                  //linux/arch/arm/include/asm/bug.h
+    BUG_ON(condition);    //conditionがtrueの際に、Crashを起こして、Oopsをdumpし、再起動する。
+                          //中身は、わざと違法操作をして、Oopsを起こす。
+                          
+    BUG_ON(!chip->base);
+	  BUG_ON(!gc->label);
+	  BUG_ON(!gc->ngpio);
+  
+dump_stack()              //linux/lib/dump_stack.c
+
+	if (index >= soc_info->pinmux_pins_num) {
+		pr_err("Invalid pin mux index: %lu (%lu)\n", index, soc_info->pinmux_pins_num);
+		dump_stack();
+		return -ENODEV;
+	}
+    
+    
+panic()                   //linux/kernel/painc.c
+                          //SoCメーカー毎に、実現が違う
+                          
+    	if (!lpc32xx_mic_domain)
+		      panic("Unable to add MIC irq domain\n");
