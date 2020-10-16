@@ -20,6 +20,7 @@ list_for_each(pos, head)
 		linux/v5.9/source/fs/jffs2/debug.c
 		
 		list_for_each(this, &c->clean_list) {		//マクロ定義にて、for文に、{}を追加していないから
+		//for (this = (&c->clean_list); this != (&c->clean_list); this = this->next ) {		//展開すると
 			struct jffs2_eraseblock *jeb = list_entry(this, struct jffs2_eraseblock, list);
 			numblocks ++;
 			dirty += jeb->wasted_size;
