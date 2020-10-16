@@ -1,8 +1,15 @@
 ----------------------------------------------------------------------
-List循環類:
+List内でのループ類:
 ----------------------------------------------------------------------
 list_for_each(pos, head)
-		aaaaaa
+
+	#define list_for_each(pos, head) \
+   	　　　for (pos = (head)->next, prefetch(pos->next); pos != (head); \
+        	pos = pos->next, prefetch(pos->next))
+	
+		このマクロは、forループである。
+		引数の pos をループ素子とし、リストの head から、後方向へ pos を移動する。また head へ戻るまで、一周する。
+		
 		它实际上是一个 for 循环，利用传入的 pos 作为循环变量，从表头 head 开始，逐项向后（ next方向）移动 pos ，直至又回到 head （ prefetch() 可以不考虑，用于预取以提高遍历速度）。
 		注意：此宏必要把list_head放在数据结构第一项成员，至此，它的地址也就是结构变量的地址。
 		
