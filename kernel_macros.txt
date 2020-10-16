@@ -73,9 +73,25 @@ subsys_initcall(gpio_mxc_init);               //機能: マクロで宣言した
 
 ----------------------------------------------------------------------
 vmlinux section list:
+	kernelをbuildをしたら、/arch/arm/kernel/vmlinux.lds が生成されるので、中身見れば分かる
 ----------------------------------------------------------------------
 .initcall4.init
 
 
+
+SECTIONS
+{
+ . = 0xC0000000 + 0x00008000;
+ .init : { /* Init code and data                */
+  _stext = .;
+  _sinittext = .;
+   *(.head.text)
+   *(.init.text) *(.cpuinit.text) *(.meminit.text)
+  ......
+  . = ALIGN(16); __setup_start = .; *(.init.setup) __setup_end = .;
+  __initcall_start = .; *(.initcallearly.init) __early_initcall_end = .;
+ *(.initcall0.init) *(.initcall0s.init)  *(.initcall1.init) *(.initcall1s.init) 
+ *(.initcall2.init) ... __initcall_end = .;
+ ...
 
 
