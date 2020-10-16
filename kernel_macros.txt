@@ -20,7 +20,7 @@ list_for_each(pos, head)
 		linux/v5.9/source/fs/jffs2/debug.c
 		
 		list_for_each(this, &c->clean_list) {		//マクロ定義にて、for文に、{}を追加していないから
-		//for (this = (&c->clean_list); this != (&c->clean_list); this = this->next ) {		//展開すると
+		//for (this = (&c->clean_list); this != (&c->clean_list); this = this->next ) {		//展開すると、これ。
 			struct jffs2_eraseblock *jeb = list_entry(this, struct jffs2_eraseblock, list);
 			numblocks ++;
 			dirty += jeb->wasted_size;
@@ -34,6 +34,8 @@ list_for_each(pos, head)
 		printk (JFFS2_DBG "Contains %d blocks with total wasted size %u, average wasted size: %u\n",
 			numblocks, dirty, dirty / numblocks);
 
+
+		list_for_each（）と、list_entry（）は、必ず一緒に使うんでしたっけ？
 --------------------------
 list_for_each_entry(pos, head, member)
 --------------------------
