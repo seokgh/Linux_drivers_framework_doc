@@ -1,25 +1,53 @@
 ----------------------------------------------------------------------
 List内でのループ類:
 ----------------------------------------------------------------------
+--------------------------
 list_for_each(pos, head)
-
+--------------------------
+	//kernel ver: v4.9.239, v5,9
+	#define list_for_each(pos, head) \
+	for (pos = (head)->next; pos != (head); pos = pos->next)
+	
+	//kernel ver: v2.6.39.4
 	#define list_for_each(pos, head) \
    	　　　for (pos = (head)->next, prefetch(pos->next); pos != (head); \
         	pos = pos->next, prefetch(pos->next))
 	
-		このマクロは、forループである。
-		引数の pos をループ素子とし、リストの head から、後方向へ pos を移動する。また head へ戻るまで、一周する。
+	このマクロは、forループである。
+	引数の pos をループ素子とし、リストの head から、後方向へ pos を移動するが、 head へ戻るまで、一周する。
+
+	例:
+		linux/v5.9/source/fs/jffs2/debug.c
 		
-		它实际上是一个 for 循环，利用传入的 pos 作为循环变量，从表头 head 开始，逐项向后（ next方向）移动 pos ，直至又回到 head （ prefetch() 可以不考虑，用于预取以提高遍历速度）。
-		注意：此宏必要把list_head放在数据结构第一项成员，至此，它的地址也就是结构变量的地址。
-		
-		
+		list_for_each(this, &c->clean_list) {		//マクロ定義にて、for文に、{}を追加していないから
+			struct jffs2_eraseblock *jeb = list_entry(this, struct jffs2_eraseblock, list);
+			numblocks ++;
+			dirty += jeb->wasted_size;
+			if (!(jeb->used_size == 0 && jeb->dirty_size == 0 && jeb->wasted_size == 0)) {
+				printk(JFFS2_DBG "clean_list: %#08x (used %#08x, dirty %#08x, wasted %#08x, unchecked %#08x, free %#08x)\n",
+					jeb->offset, jeb->used_size, jeb->dirty_size, jeb->wasted_size,
+					jeb->unchecked_size, jeb->free_size);
+			}
+		}
+
+		printk (JFFS2_DBG "Contains %d blocks with total wasted size %u, average wasted size: %u\n",
+			numblocks, dirty, dirty / numblocks);
+
+--------------------------
 list_for_each_entry(pos, head, member)
+--------------------------
 
+
+
+--------------------------
 list_entry(ptr, type, member)
+--------------------------
 
+
+
+--------------------------
 offsetof(TYPE, MEMBER)
-
+--------------------------
 
 
 
@@ -27,8 +55,7 @@ offsetof(TYPE, MEMBER)
 
 
 ----------------------------------------------------------------------
-vmlinux image作成時の優先度マクロ:
-Section Property
+vmlinux image作成時の優先度マクロ: Section Property
     include/linux/init.h
 ----------------------------------------------------------------------
 #define __define_initcall(fn, id) \
