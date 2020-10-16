@@ -37,13 +37,37 @@ list_for_each(pos, head)
 			numblocks, dirty, dirty / numblocks);
 
 
-		list_for_each（）と、list_entry（）は、必ず一緒に使うんでしたっけ？
+		list_for_each（）と、list_entry（）は、ほぼ一緒に使うんでしたっけ？
+		
 --------------------------
 list_for_each_entry(pos, head, member)
 --------------------------
+//kernel ver: v5.9
+
+/**
+ * list_for_each_entry - iterate over list of given type
+ * @pos:	the type * to use as a loop cursor.
+ * @head:	the head for your list.
+ * @member:	the name of the list_head within the struct.
+ */
+#define list_for_each_entry(pos, head, member)				\
+	for (pos = list_first_entry(head, typeof(*pos), member);	\
+	     &pos->member != (head);					\
+	     pos = list_next_entry(pos, member))
 
 
-
+/**
+ * list_first_entry - get the first element from a list
+ * @ptr:	the list head to take the element from.
+ * @type:	the type of the struct this is embedded in.
+ * @member:	the name of the list_head within the struct.
+ *
+ * Note, that list is expected to be not empty.
+ */
+#define list_first_entry(ptr, type, member) \
+	list_entry((ptr)->next, type, member)
+	
+	
 --------------------------
 list_entry(ptr, type, member)
 --------------------------
