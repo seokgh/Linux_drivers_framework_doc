@@ -1,0 +1,81 @@
+----------------------------------------------------------------------
+List循環類:
+----------------------------------------------------------------------
+list_for_each(pos, head)
+
+list_for_each_entry(pos, head, member)
+
+list_entry(ptr, type, member)
+
+offsetof(TYPE, MEMBER)
+
+
+
+
+
+
+
+----------------------------------------------------------------------
+vmlinux image作成時の優先度マクロ:
+Section Property
+    include/linux/init.h
+----------------------------------------------------------------------
+#define __define_initcall(fn, id) \
+　    static initcall_t __initcall_##fn##id __used \
+	    __attribute__((__section__(".initcall" #id ".init"))) = fn;         //fn関数を、特定のproperty sectionに配置してる
+  
+
+
+#define pure_initcall(fn)		      __define_initcall(fn, 0)
+
+#define core_initcall(fn)		      __define_initcall(fn, 1)
+#define core_initcall_sync(fn)		__define_initcall(fn, 1s)
+#define postcore_initcall(fn)		  __define_initcall(fn, 2)
+#define postcore_initcall_sync(fn) __define_initcall(fn, 2s)
+#define arch_initcall(fn)		      __define_initcall(fn, 3)
+#define arch_initcall_sync(fn)		__define_initcall(fn, 3s)
+#define subsys_initcall(fn)		    __define_initcall(fn, 4)
+#define subsys_initcall_sync(fn)	__define_initcall(fn, 4s)
+#define fs_initcall(fn)			      __define_initcall(fn, 5)
+#define fs_initcall_sync(fn)		  __define_initcall(fn, 5s)
+#define rootfs_initcall(fn)		    __define_initcall(fn, rootfs)
+#define device_initcall(fn)		    __define_initcall(fn, 6)
+
+            
+#define device_initcall_sync(fn)	__define_initcall(fn, 6s)
+#define late_initcall(fn)		      __define_initcall(fn, 7)
+#define late_initcall_sync(fn)		__define_initcall(fn, 7s)
+
+例:
+subsys_initcall(gpio_mxc_init);               //機能: マクロで宣言した関数を、特定のSectionに配置する(.initcall4.init)
+
+    static int __init gpio_mxc_init(void)
+    {
+	    return platform_driver_register(&mxc_gpio_driver);
+    }
+
+
+----------------------------------------------------------------------
+.ko moduleマクロ:
+      優先度6
+      include/linux/module.h
+----------------------------------------------------------------------
+#define module_init(x)	__initcall(x);
+
+    展開すると:
+    module_init
+        __initcall
+            device_initcall
+                __define_initcall("6",fn,6)
+
+
+#define module_exit(x)	__exitcall(x);
+
+----------------------------------------------------------------------
+vmlinux section list:
+----------------------------------------------------------------------
+.initcall4.init
+
+
+
+
