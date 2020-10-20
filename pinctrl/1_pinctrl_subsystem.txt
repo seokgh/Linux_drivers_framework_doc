@@ -1,0 +1,667 @@
+--------------------------------------------------------------------------------
+pinctrl subsystem
+    &
+gpio subsystem
+--------------------------------------------------------------------------------
+
+OS無しの時は、
+GPIOを操作する時には、直接レジスタを弄って、設定していた。
+また、
+Linux環境でDevice Treeを使ってやるとしても、そのPIN関係のレジスタを、dtsに乗せて、Driverで露骨に、読みだして、設定していた。
+
+これは、古いやり方であり、よく問題(追突など)が発生してしまう。
+
+なので、Linuxカーネルには、これらの問題を解決するために、二つのFrameworkを作っている:
+    pinctrl subsystem
+    gpio    subsystem
+        
+
+
+----------------------------------------
+iMX.6ULLを例にすると、GPIOを使うためには、大きく二つのことをしていた:
+----------------------------------------
+Step 1
+    PINのMultiplexを設定する、
+    PINの電気特性を設定する
+        (pinctrl subsystem)
+
+        1)pin multiplexing: (PIN複用)
+                    GPIO    にするのか？
+                    I2C1_SCLにするのか？
+                    I2C1_SDAにするのか？
+                    など
+        2)pin configuration: 電気特性設定
+                    Pull-up resistor    にする？
+                    Pull-down resistor  にする？
+                    Tri-state設定(高阻態)
+                    Drive Strength(IOの駆動能力、信号の強さ。例えば、8mA, 12mAなど)
+                    Speedなど
+
+Step 2
+    Step1で、GPIOとして設定したら、またGPIOとしての基本設定をする
+        (gpio subsystem)
+
+なので、
+Linux Kernelでは、Step1/2を、Frameworkを利用して、実現している。
+pinctrl subsystemと、gpio subsystemの役割も、ほぼ明らかになった。
+
+では、それぞれを紹介する:
+    1_pinctrl_subsystem.txt
+    2_gpio_subsystem.txt
+
+本メモでは、pinctrl subsystemを解析してみる。
+gpio subsystemは、2_gpio_subsystem.txtにて、解析する。
+
+--------------------------------------------------------------------------------
+pinctrl subsystem
+--------------------------------------------------------------------------------
+主な役割:
+    1.device tree内のPIN情報を取得する
+    2.取得できたPIN情報により、PINのMultiplexを設定する
+    3.取得できたPIN情報により、PINの電気特性(pull-up,pull-down, drive strenght, speedなど)を設定する
+
+                         +-----------------+
+                         | other driver    |                          pinctrl subsystem
+                         |(use pinctrl drv)|   consumer.h   +----------------------------------+
+                         +-----------------+<-------------->|                                  |
+                                                            |                                  |
+ +-----------------+     +-----------------+                |           pinctrl core           |
+ | other driver    |<--->| gpio subsystem  |<-------------->|                                  <--------+
+ |(use gpio subsys)|     +-----------------+                |                                  |        |
+ +-----------------+                                        +---------------+------------------+        |
+                                                                            |                           | struct pinctrl_desc を登録
+                                                                            |                           |
+                                                                            |                           |
+                                                                            |          +----------------+--------------+
+                                                                            |          |                               |
+                                                                            +---------->       SoC pinctrl driver      |
+                                                                                       |         (low level)           |
+                                                                                       +----------------+--------------+
+    
+----------------------------------------
+struct pinctrl_desc
+----------------------------------------
+struct pinctrl_desc:
+    pinctrl coreは、pinctrl_desc構造を使って、pin controllerを代表する。
+
+        /* include/linux/pinctrl/pinctrl.h */
+        struct pinctrl_desc {
+                const char *name;
+
+                const struct pinctrl_pin_desc *pins;    //all pins
+
+                unsigned int npins;
+
+                const struct pinctrl_ops *pctlops;      //groups系
+                const struct pinmux_ops *pmxops;        //multiplex(function)系
+                const struct pinconf_ops *confops;      //configuration系
+
+                struct module *owner;
+                #ifdef CONFIG_GENERIC_PINCONF
+                    unsigned int num_custom_params;
+                    const struct pinconf_generic_params *custom_params;
+                    const struct pin_config_item *custom_conf_items;
+                #endif
+        };
+
+
+struct pinctrl_pin_desc:
+    pinctrl subsystemは、SOCの全てのpinを、struct pinctrl_pin_desc型の配列で、管理する。
+
+        struct pinctrl_pin_desc {
+                unsigned number;
+                const char *name;
+                void *drv_data;
+        };
+
+pin controller自身は、device tree内の一つのnodeである必要がある。
+soc周辺のchipは、自分のnodeにて、使うpin ctrl情報を乗せる(phandle---dtcがつける番号)必要がある。
+    
+
+Pin groups:
+       複数のPINを使うSPI、IICなどのpinを、pin groupと呼ぶ。groupらを管理するため、pin groupSもある。
+
+        struct pinctrl_ops {
+            int (*get_groups_count) (struct pinctrl_dev *pctldev); 
+        
+            const char *(*get_group_name) (struct pinctrl_dev *pctldev, unsigned selector); 
+        
+            int (*get_group_pins) (struct pinctrl_dev *pctldev, unsigned selector, const unsigned **pins, unsigned *num_pins); 
+        
+            void (*pin_dbg_show) (struct pinctrl_dev *pctldev, struct seq_file *s, unsigned offset); 
+        
+            int (*dt_node_to_map) (struct pinctrl_dev *pctldev, struct device_node *np_config, struct pinctrl_map **map, unsigned *num_maps); 
+        
+            void (*dt_free_map) (struct pinctrl_dev *pctldev, struct pinctrl_map *map, unsigned num_maps); 
+        };
+
+
+Pin configuration:
+    Pin configurationの対象は、pin or pin groupである。
+    pinctrl subsystemは、pin configurationを使って、PULL-UP/DOWN, Tri-State, Drive-Strenghtなどを設定してる。
+    struct pinconf_ops に、これらの機能を定義してる:
+
+        struct pinconf_ops { 
+            #ifdef CONFIG_GENERIC_PINCONF 
+            bool is_generic; 
+            #endif
+
+            int (*pin_config_get) (struct pinctrl_dev *pctldev, unsigned pin, unsigned long *config); 
+                /* 指定したpinの現在のconfigを取得する(configの具体的の意味は、pinctrl driverのみが知ってる) */
+            int (*pin_config_set) (struct pinctrl_dev *pctldev, unsigned pin, unsigned long *configs, unsigned num_configs); 
+
+            int (*pin_config_group_get) (struct pinctrl_dev *pctldev, unsigned selector, unsigned long *config); 
+                /* 指定したpin groupのconfigを取得 */
+            int (*pin_config_group_set) (struct pinctrl_dev *pctldev, unsigned selector, unsigned long *configs, unsigned num_configs); 
+            
+            int (*pin_config_dbg_parse_modify) (struct pinctrl_dev *pctldev, const char *arg, unsigned long *config); 
+            void (*pin_config_dbg_show) (struct pinctrl_dev *pctldev, struct seq_file *s, unsigned offset); 
+            void (*pin_config_group_dbg_show) (struct pinctrl_dev *pctldev, struct seq_file *s, unsigned selector); 
+            void (*pin_config_config_dbg_show) (struct pinctrl_dev *pctldev, struct seq_file *s, unsigned long config); 
+        };
+
+
+Pin multiplexing:
+    Pin multiplexingの対象も、pin or pin groupである。
+    pinctrl subsystemは、struct pinmux_opsを使って、pinmux操作を定義してる:
+
+        struct pinmux_ops {
+            /* pinが、他機能として、すでに使われたのか、チェック */
+            int (*request) (struct pinctrl_dev *pctldev, unsigned offset); 
+            
+            /* requestと逆 */
+            int (*free) (struct pinctrl_dev *pctldev, unsigned offset); 
+
+            /* function 数(IIC, SPI, USBなど、機能数)を取得*/
+            int (*get_functions_count) (struct pinctrl_dev *pctldev); 
+
+            /* 指定したfunctionの名前を取得 */
+            const char *(*get_function_name) (struct pinctrl_dev *pctldev, unsigned selector); 
+
+            /* 指定したfunctionが使うpin groupを取得する */
+            int (*get_function_groups) (struct pinctrl_dev *pctldev, unsigned selector, const char * const **groups, unsigned *num_groups); 
+
+            /* 指定したpin group(group_selector)を、指定するfunctionに設定する(func_selector) */
+            int (*set_mux) (struct pinctrl_dev *pctldev, unsigned func_selector, unsigned group_selector); 
+
+            /* gpio系の？ */
+            int (*gpio_request_enable) (struct pinctrl_dev *pctldev, struct pinctrl_gpio_range *range, unsigned offset); 
+            void (*gpio_disable_free) (struct pinctrl_dev *pctldev, struct pinctrl_gpio_range *range, unsigned offset); 
+            int (*gpio_set_direction) (struct pinctrl_dev *pctldev, struct pinctrl_gpio_range *range, unsigned offset, bool input); 
+
+            bool strict; 
+        };
+
+
+Pin state:
+        pinctrl subsystemにて、使う用語。
+ 
+        pin(pin group)------\
+            +                \
+        function--------------- 一つの"pin state"という物を、確定する
+            +                /
+        configuration_______/
+
+        確かに、とあるpin(或いはpin group)と、pin functionと、pin configuration情報があれば、
+        pin状態を確定したと、言える。
+
+Pin map:
+    include/linux/pinctrl/machine.h
+
+    struct pinctrl_map { 
+        const char *dev_name;           //device name
+        const char *name;               //pin state name
+        enum pinctrl_map_type type;     //type:
+                                        //PIN_MAP_TYPE_MUX_GROUP     //
+                                        //PIN_MAP_TYPE_CONFIGS_PIN   //
+                                        //PIN_MAP_TYPE_CONFIGS_GROUP // 
+                                        //PIN_MAP_TYPE_DUMMY_STATE   //
+
+        const char *ctrl_dev_name;      //pin controller device name
+
+        //このmapが使うデータ. 上のtypeにより、dataはunion内の一つになる.
+        union { 
+            struct pinctrl_map_mux mux;
+            struct pinctrl_map_configs configs;
+        } data; 
+    };
+
+
+--------------------------------------------------------------------------------
+他Driverは、pinctrl subsystemをどう使うのか？
+--------------------------------------------------------------------------------
+step 1. dtsに、まず設定しておく
+step 2. driverにて、pinctrl_get()/devm_pinctrl_get() Interfaceを使って、struct pinctrl型のhandleを取得する
+step 3. pinctrl_select_state() Interfaceを呼んで、とあるstateを有効にする
+step 4. pinctrl subsystemのその他のinterfaceを呼ぶ--->pinctrl subsystemは、SoCが登録した各種callbackを呼ぶ
+
+----------------------------------------
+他kernel moduleとのインタフェース
+----------------------------------------
+include/linux/pinctrl/consumer.h
+    他Driverは、このヘッダをincludeして、pinctrl subsystemが外へ提供してるinterfaceを使って、
+    自分が希望するpin設定を行う:
+        1)pin multiplex設定する
+        2)pin 電気特性設定する
+
+    他Driverが、pinctrl subsystemのinterfaceを呼ぶ流れ:
+        1) pin control state holderを取得する
+        2) state holderを取得できたら、pin control stateを設定する
+        3) pin control state holderを解放する
+
+    例:
+    drivers/bluetooth/btmtkuart.c
+            ...
+            #include <linux/gpio/consumer.h>
+            #include <linux/pinctrl/consumer.h>
+            #include <linux/regulator/consumer.h>
+            ...
+            ...
+            bdev->pinctrl = devm_pinctrl_get(&serdev->dev);
+            bdev->pins_boot    = pinctrl_lookup_state(bdev->pinctrl, "default");
+            bdev->pins_runtime = pinctrl_lookup_state(bdev->pinctrl, "runtime");
+            ...
+            pinctrl_select_state(bdev->pinctrl, bdev->pins_boot);
+            pinctrl_select_state(bdev->pinctrl, bdev->pins_runtime);
+            ...
+
+include/linux/pinctrl/devinfo.h
+include/linux/pinctrl/machine.h
+
+
+
+--------------------------------------------------------------------------------
+gpio subsystemと、pinctrl subsystemの関係
+--------------------------------------------------------------------------------
+kernel v5.xなどでは、下記interfaceが、無くなったよう:
+    int  pinctrl_request_gpio(unsigned gpio) ; 
+    void pinctrl_free_gpio(unsigned gpio) ; 
+    int pinctrl_gpio_direction_input(unsigned gpio); 
+    int pinctrl_gpio_direction_output(unsigned gpio);
+
+
+
+---------------------------------------- 
+なので、
+    pinctrl subsystemを使う側としては、 やるべきことは、
+    dtsにて、そのPINのプロパティーを、正しく設定するだけであり、
+    その他の初期化は、pinctrl subsystemがやってくれる。
+
+    つまり、dtsから値を取得して、実際にRegisterへ落とすのは、pinctrl subsystemがやっていて、
+    SOCメーカーさんが、すでに書いてくれた。
+
+    中身の原理は、下の節で説明する。
+---------------------------------------- 
+    
+    driver dir:
+                drivers/pinctrl
+
+
+    pinctrl subsystemは、dtsからpin設定情報をgetしてるので、dtsの例を見る:
+    
+    ---------------------------------------- 
+    arch/arm/board/dts/imx6ull.dtsi:
+    ---------------------------------------- 
+        ...
+        #include "imx6ull-pinfunc.h" //path: arch/arm/board/dts/imx6ull-pinfunc.h
+                                     //このfileの中では、また "imx6ul-pinfunc.h"をincludeしている。
+        ...
+        iomuxc_snvs: iomuxc-snvs@02290000 {
+            compatible = "fsl,imx6ul-iomuxc-snvs";
+            reg = <0x02290000 0x10000>;
+        };
+
+        iomuxc: iomuxc@020e0000 {   //pin mulなので、これだけの情報じゃ、足りない。なので、そのboardのdtsを見るべき。
+            compatible = "fsl,imx6ul-iomuxc";
+            reg = <0x020e0000 0x4000>;
+        };
+
+
+        gpr: iomuxc-gpr@020e4000 {  //GPR: General Purpose Register, 汎用レジスター
+            compatible = "fsl,imx6ul-iomuxc-gpr","fsl,imx6q-iomuxc-gpr","syscon";
+            reg = <0x020e4000 0x4000>;
+        };
+    
+    ---------------------------------------- 
+    dts:
+    ---------------------------------------- 
+        &iomuxc {
+            pinctrl-names = "default";
+            pinctrl-0 = <&pinctrl_hog_1>;   //下のラベル
+            imx6ul-evk {
+                pinctrl_hog_1: hoggrp-1 {   //hot plug系のPIN list?
+                    fsl,pins = <            //この文言"fsl,pins"は、固定の書き方である。Driver解析で分かる。
+                        MX6UL_PAD_UART1_RTS_B__GPIO1_IO19       0x17059  /* SD1 CD (card detection) 数字の意味は下で(電気特性) */
+                        MX6UL_PAD_GPIO1_IO05__USDHC1_VSELECT    0x17059  /* SD1 VSELECT */
+                        MX6UL_PAD_GPIO1_IO09__GPIO1_IO19        0x17059  /* SD1 RESET */
+                    >;
+                };
+
+                pinctrl_csi1: csigrp {      //mipi cameraのPIN list
+                    fsl,pins = <
+                        ...
+                        >;
+                };
+
+                pinctrl_enet1: enet1grp {   //enet1のPIN list
+                    fsl,pins = <
+                        ...
+                        >;
+                };
+
+                ...
+                ...
+                ...
+            };
+        };
+
+
+    dtsにて、使う#defineマクロは、下記のような内容だった:
+
+        #define MX6UL_PAD_UART1_RTS_B__UART1_DCE_RTS            0x0090 0x031C 0x0620 0x0 0x3
+        #define MX6UL_PAD_UART1_RTS_B__UART1_DTE_RTS            0x0090 0x031C 0x0000 0x0 0x0
+        #define MX6UL_PAD_UART1_RTS_B__ENET1_TX_ER              0x0090 0x031C 0x0000 0x1 0x0
+        #define MX6UL_PAD_UART1_RTS_B__USDHC1_CD_B              0x0090 0x031C 0x0668 0x2 0x1
+        #define MX6UL_PAD_UART1_RTS_B__CSI_DATA05               0x0090 0x031C 0x04CC 0x3 0x1
+        #define MX6UL_PAD_UART1_RTS_B__ENET2_1588_EVENT1_OUT    0x0090 0x031C 0x0000 0x4 0x0
+        #define MX6UL_PAD_UART1_RTS_B__GPIO1_IO19               0x0090 0x031C 0x0000 0x5 0x0    //今、これを使ってる
+        #define MX6UL_PAD_UART1_RTS_B__USDHC2_CD_B              0x0090 0x031C 0x0674 0xB 0x2
+
+    つまり、これほどのPIN muxができるってことだ(九つ)。
+
+    マクロの意味は、
+        #define MX6UL_PAD_UART1_RTS_B__GPIO1_IO19               0x0090 0x031C 0x0000 0x5 0x0
+                \--------+----------/  \---+----/
+                         |                 |
+                         v                 v
+                    PINの名前           何のPINとして使うのかの意味
+
+    なので、どのPINとして使いたい場合は、上記九つから、一つ選択すれば良い。
+    あとは、pinctrl subsystemにより、自動に初期化される（原理は下で）。
+
+
+問:
+    後ろの五つの数字は、レジスタへの設置値なのかなぁ？
+答:
+   .hのコメントにあるように、
+   レジスタのoffsetもあり、レジスタへの値もある。
+   
+
+   設定してるレジスタは、下記五つだ(コメントにある)。
+   Frameworkは、後で見る。
+
+            base address: 0x020e0000
+
+            <mux_reg  conf_reg  input_reg  mux_mode  input_val>
+                ↑       ↑           ↑        ↑          ↑
+             0x0090    0x031C    0x0000      0x5       0x0
+               \        \           \        \          \
+               \        \           \        \          \入力機能ある時の入力値
+               \        \           \        \
+               \        \           \        \本番のPIN機能を選択するレジスタへの値
+               \        \           \
+               \        \           \0: 入力機能なしの意味
+               \        \
+               \        \このPINの電気特性設定レジスタのoffset。このレジスタに設定する具体の値は、上記で、マクロ引用す
+               \         る所の後ろに付いてる値 0x17059 である。
+               \
+               \このPINのmuxレジスタのoffsetだ
+
+
+    なので、要約すると、
+    具体のboardのdts fileのpinctrl説明文で、deviceの種類により子nodeを作り、その中に、deviceが使うPINらを並べる。
+    
+
+--------------------------------------------------------------------------------
+pinctrl subsystem原理
+--------------------------------------------------------------------------------
+上の節で、dtsでは、pinctrl-subsystemを使う前提で、ただ値を書いただけで、正常動作してるが、
+この節は、それが、どうRegisterへ落とされるのか、解析する。
+
+まずは、そのSOCのpinctrl-subsystemのdriverを探そう。driverは、
+platform_deviceと、platform_driverが、matchingされる構造と同じだ。
+なので、探しやすい。
+
+    iomux: iomux@020e0000 {
+        compatible = "fsl,imx6ul-iomux";    //これでplatform_driverを探せる
+        reg = <0x020e0000 0x4000>;
+    };
+
+
+
+pdrv path:
+    drivers/pinctrl/freescale/pinctrl-imx6ul.c  //old
+    drivers/pinctrl/freescale/pinctrl-imx.c     //new
+
+pdrv probe func:
+    imx6ul_pinctrl_probe()
+        --->imx_pinctrl_probe()
+                --->pinctrl_desc 型の構造体 imx_pinctrl_desc を新規、初期化する
+
+                    imx_pinctrl_desc->name = dev_name(&pdev->dev);
+                    imx_pinctrl_desc->pins = info->pins;
+                    imx_pinctrl_desc->npins = info->npins;
+                    imx_pinctrl_desc->pctlops = &imx_pctrl_ops;     //肝、pinctrl subsystemは、これらでPIN MUXを設定する
+                    imx_pinctrl_desc->pmxops = &imx_pmx_ops;        //肝、pinctrl subsystemは、これらでPIN MUXを設定する
+                    imx_pinctrl_desc->confops = &imx_pinconf_ops;   //肝、pinctrl subsystemは、これらでPIN MUXを設定する
+                    imx_pinctrl_desc->owner = THIS...
+
+                    ret = imx_pinctrl_probe_dt(pdev, info);         //dts解析
+                    ...
+
+                    ------------------------------------------
+                    probe関数内の一部実code例:
+                    ------------------------------------------
+                        imx_pinctrl_desc = devm_kzalloc(&pdev->dev, sizeof(*imx_pinctrl_desc), GPF_KERNEL);
+                        if (!imx_pinctrl_desc)
+                            return -ENOMEM;
+
+                        devm_kmalloc();
+                        devm_kmalloc();
+                        res = platform_get_resource(pdev, IORESOURCE_MEM, 0);   //コントローラのbaseアドレス020e0000を取得
+                        ipctl->base = devm_ioremap_resource(&pdev->dev, res);   //コントローラのbaseアドレスを仮想アドレスni
+                        if (IS_ERR(ipctl->base))
+                            return PTR_ERR(ipctl->base);
+
+                        of_property_read_bool(dev_np, "fsl,input-sel");
+                        of_parse_phandle(dev_np, "fsl,input-sel");
+                        of_iomap(np, 0);
+                        of_node_put(0);
+                        dev_err(&pdev->dev, "iomuxc input select base address not found\n");
+                        return PTR_ERR(ipctl->input_sel_base);
+
+                        ret = imx_pinctrl_probe_dt(pdev, info)
+                        if (ret) {
+                            dev_err(&pdev->dev, "fail to probe dt properties\n");
+                            return ret;
+                        }
+                            
+                        platform_set_drvdata(pdev, ipctl);
+
+                        ipctl->pctl = pinctrl_register(imx_pinctrl_desc, &pdev->dev, ipctl);
+                        if (!ipctl->pctl) {
+                            dev_err(&pdev->dev, "could not register IMX pinctrl driver\n");
+                            return -EINVAL;
+                        }
+--------------------
+probeまとめ:
+--------------------
+    imx_pinctrl_probe()
+        --->imx_pinctrl_probe_dt()
+                --->imx_pinctrl_parse_functions()
+                        --->imx_pinctrl_parse_groups()  //dts内のPIN情報を解析して、六つのu32型の整数を取得する:
+                                                        //即ち、mux_reg, conf_reg(電気特性), input_reg(入力機能), mux_mode, input_val, conf_regへの値
+                                                        //下で解析してる。
+
+        --->pinctrl_register();                         //KernelへこのSOCのpinctrl driverを登録する。
+                                                        //当たり前に、すべてのsocは、これを使う。
+
+            ------------------------------------------
+            imx_pinctrl_probe_dt()
+            一部実code例:
+            ------------------------------------------
+                nfuncs = of_get_child_count(np);
+                if (nfuncs <= 0) {
+                    dev_err(&pdev->dev, "no functions defined\n");
+                    return -EINVAL;
+                }
+                info->nfunctions = nfuncs;
+                info->functions = devm_kzalloc(&pdev->dev, nfuncs * sizeof(struct imx_pmx_func), GPF_KERNEL);
+                if (!info->functions)
+                    return -ENOMEM;
+                ...
+                for_each_child_of_node(np, child)
+                    info->ngroups += of_get_child_count(child);
+
+                ...
+                info->groups = devm_kzalloc(&pdev->dev, info->ngroups * sizeof(struct imx_pin_group), GPF_KERNEL);
+                if (!info->groups)
+                    return -ENOMEM;
+
+                for_each_child_of_node(np, child)
+                    imx_pinctrl_parse_functions(child, info, i++);
+
+                return 0;
+
+
+            ------------------------------------------
+            imx_pinctrl_parse_functions(struct device_node *np,
+                                        struct imx_pinctrl_soc_info *info,
+                                        u32 index)
+            一部実code例:
+            ------------------------------------------
+                ...
+                for_each_child_of_node(np, child) {
+                    func->groups[i] = child->name;
+                    grp = &info->groups[info->grp_index++];
+                    imx_pinctrl_parse_groups(child, grp, info, i++);
+                }
+                ...
+
+            ------------------------------------------
+            imx_pinctrl_parse_groups(struct device_node *np,
+                                     struct imx_pin_group *grp,
+                                     struct imx_pinctrl_soc_info *info,
+                                     u32 index)
+            一部実code例:
+            ------------------------------------------
+                ...
+                for (i = 0; i < grp->npins; i++ ( {
+                    struct imx_pin *pin = &grp->pins[i];
+                    ...
+                    pin_id = (mux_reg != -1) ? mux_reg / 4 : conf_reg / 4;
+                    pin_reg = &info->pin_regs[pin_id];
+                    pin->pin = pin_id;
+                    grp->pin_ids[i] = pin_id;
+
+                    pin_reg->mux_reg = mux_reg;                 //dtsでの値
+                    pin_reg->conf_reg = be32_to_cpu(*list++);   //dtsでの値
+                    pin->input_reg = be32_to_cpu(*list++);      //dtsでの値
+                    pin->mux_mode = be32_to_cpu(*list++);       //dtsでの値
+                    pin->input_val = be32_to_cpu(*list++);      //dtsでの値
+                    ...  
+
+                    config = be32_to_cpu(*list++);              //マクロ引用してる所の後ろの数字: 0x17059 電気特性である。
+                    if (config & IMX_PAD_SION)
+                        pin->mux_mode |= IOMUX_CONFIG_SION;
+                    pin->config = config & ~IMX_PAD_SION;
+
+                }
+
+                return 0;
+
+            つまり、この関数にて、dtsで書いたpinctrl情報を、読み出して、解析して、保存してる。
+            
+
+--------------------------------------------------------------------------------
+PINの電気特性、PINのMUXを設定するops集:
+--------------------------------------------------------------------------------
+    imx_pinctrl_desc->pctlops = &imx_pctrl_ops;     //肝、pinctrl subsystemは、これらでPIN MUXを設定する
+    imx_pinctrl_desc->pmxops  = &imx_pmx_ops        //肝、pinctrl subsystemは、これらでPIN MUXを設定する
+    imx_pinctrl_desc->confops = &imx_pinconf_ops;   //肝、pinctrl subsystemは、これらでPIN MUXを設定する
+
+
+----------------------------------------
+1. PINの電気特性を設定:
+----------------------------------------
+    static const struct pinconf_ops imx_pinconf_ops = {
+        .pin_config_get = imx_pinconf_get,
+        .pin_config_set = imx_pinconf_set,          //これを見てみる
+        .pin_config_dbg_show = imx_pinconf_dbg_show,
+        .pin_config_group_dbg_show = imx_pinconf_group_dbg_show,
+    };
+
+
+imx_pinconf_set():             //この関数は、PINの電気特性を設定する関数である
+                               //(conf_reg registerを設定する関数である)
+
+詳細:
+static int imx_pinconf_set(struct pinctrl_dev *pctldev,
+                unsigned pin_id, unsigned long *configs,
+                unsigned num_configs)
+{
+    struct imx_pinctrl *ipctl = pinctrl_dev_get_drvdata(pctldev);
+    ...
+    for (i = 0; i < num_configs; i++) {
+        if (info->flags & SHARE_MUX_CONF_REG) {
+            reg = readl(ipctl->base + pin_reg->cong_reg);   //iomuxコントローラのconfigレジスタのaddr
+            reg &= ~0xffff;
+            reg |= configs[i];
+            writel(reg, ipctl->base + pin_reg->conf_reg);   //
+        } else {
+            wirtel(configs[i], ipctl->base + pin_reg->cong_reg);
+        }
+        dev_dbg(ipctl->dev, "write: offset 0x%x val 0x%1x\n", pin_reg->conf_reg, configs[i]);
+    }
+    ...
+}
+
+----------------------------------------
+2. PINのmuxを設定:
+----------------------------------------
+PINを何として、使うのか、決めるops
+
+    static const struct pinmux_ops imx_pmx_ops = {
+        .get_functions_count = imx_pmx_get_funcs_count,
+        .get_function_name = imx_pmx_get_func_name,
+        .get_function_groups = imx_pmx_get_groups,
+        .set_mux = imx_pmx_set,                         //肝
+        .gpio_request_enable = imx_pmx_gpio_request_enable,
+        .gpio_set_direction = imx_pmx_gpio_set_direction,
+    };
+    
+
+imx_pmx_set():                 //この関数は、PINのMuxを設定する関数である
+                               //(mux_reg registerを設定する関数である)
+
+詳細:
+
+imx_pmx_set()
+{
+    ...
+    if (info->flags & SHARE_MUX_CONF_REG) {
+        reg = readl(ipctl->base + pin_reg->mux_reg);
+        reg &= ~(0x7 << 20);
+        reg |= (pin->mux_mode << 20);
+        writel(reg, ipctl->base + pin_reg->mux_reg);
+    } else {
+        writel(pin->mux_mode, ipctl->base + pin_reg->mux_reg);
+    }
+     ...
+}
+
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
