@@ -1,0 +1,380 @@
+--------------------------------------------------------------------------------
+pinctrl subsystem
+    &
+gpio subsystem
+--------------------------------------------------------------------------------
+
+OS無しの時は、
+GPIOを操作する時には、直接レジスタを弄って、設定していた。
+また、
+Linux環境でDevice Treeを使ってやるとしても、そのPIN関係のレジスタを、dtsに乗せて、Driverで露骨に、読みだして、設定していた。
+
+これは、古いやり方で、よく問題(追突など)が発生してしまう。
+
+なので、Linuxカーネルには、これらの問題を解決するために、二つのFrameworkを作っている:
+    pinctrl subsystem
+    gpio    subsystem
+        
+
+
+----------------------------------------
+iMX.6ULLを例にすると、
+GPIOを使うためには、大きく二つのことをしていた:
+----------------------------------------
+Step 1
+    PINのMultiplexを設定する、電気特性を設定する
+        (pinctrl subsystem)
+
+        multiplex:
+                    GPIO    にするのか？
+                    I2C1_SCLにするのか？
+                    I2C1_SDAにするのか？
+                    など
+        電気特性:
+                    Pull-up resistor    にする？
+                    Pull-down resistor  にする？
+                    Drive Strength(IOの駆動能力、信号の強さ。例えば、8mA, 12mAなど)
+                    Speedなど
+
+Step 2
+    Step1で、GPIOとして設定したら、またGPIOとしての基本設定をする
+        (gpio subsystem)
+
+なので、
+Linux Kernelでは、Step1/2を、Frameworkを利用して、実現している。
+
+pinctrl subsystemと、gpio subsystemの役割も、ほぼ明らかになった。
+
+では、それぞれを紹介する:
+    1_pinctrl_subsystem.txt
+    2_pinctrl_subsystem.txt
+
+本メモでは、gpio subsystemを解析してみる。
+pinctrl subsystemは、1_pinctrl_subsystem.txtにて、解析する。
+
+--------------------------------------------------------------------------------
+gpio subsystem
+--------------------------------------------------------------------------------
+pinctrl subsystemを通じて、PINをGPIO functionとして
+設定した場合に、その後のことは、gpio subsystemを使えば良い。
+設定してない場合には、もちろん、gpio subsystemを使わない。
+
+sample dts:
+        ...
+        &iomuxc {
+            pinctrl-names = "default";
+            pinctrl-0 = <&pinctrl_hog_1>;   //下のラベル
+
+            imx6ul-evk {
+                pinctrl_hog_1: hoggrp-1 {   //hot plug系のPIN list?
+                    fsl,pins = <
+                        MX6UL_PAD_UART1_RTS_B__GPIO1_IO19       0x17059  /* SD1 CD (card detection) 数字の意味は1_pinctrl_subsystem.txtにて(電気特性) */
+                                                                         /* SD1 slotのコントローラは、usdhc1 である */
+                        MX6UL_PAD_GPIO1_IO05__USDHC1_VSELECT    0x17059  /* SD1 VSELECT */
+                        MX6UL_PAD_GPIO1_IO09__GPIO1_IO19        0x17059  /* SD1 RESET */
+                    >;
+                };
+        ...
+
+
+上記dts sampleにて、マクロMX6UL_PAD_UART1_RTS_B__GPIO1_IO19の意味は、
+MX6UL_PAD_UART1_RTS_B  PIN を 
+GPIO_19 (SD card detection) として使うという意味だ。
+
+#define MX6UL_PAD_UART1_RTS_B__GPIO1_IO19               0x0090 0x031C 0x0000 0x5 0x0
+        \--------+----------/  \---+----/
+                 |                 |
+                 v                 v
+            PINの名前           何のPINとして使うのかの意味
+
+
+
+問: では、このGPIO_19は、どこで、どう使われるのか？
+答: 
+    MX6UL_PAD_UART1_RTS_B__GPIO1_IO19       0x17059  /* SD1 CD */
+    は、
+    SD card挿入を検知するGPIO PINとして使うので、
+    SD card slot1のコントローラnodeを見る。
+
+linux/v5.8/source/arch/arm/boot/dts/imx6ul.dtsi:
+            ...
+            usdhc1: usdhc@2190000 {
+                    compatible = "fsl,imx6ul-usdhc", "fsl,imx6sx-usdhc";
+                    reg = <0x02190000 0x4000>;
+                    interrupts = <GIC_SPI 22 IRQ_TYPE_LEVEL_HIGH>;
+                    clocks = <&clks IMX6UL_CLK_USDHC1>,
+                             <&clks IMX6UL_CLK_USDHC1>,
+                             <&clks IMX6UL_CLK_USDHC1>;
+                    clock-names = "ipg", "ahb", "per";
+                    fsl,tuning-step = <2>;
+                    fsl,tuning-start-tap = <20>;
+                    bus-width = <4>;
+                    status = "disabled";
+            };
+            ...
+
+linux/v5.8/source/arch/arm/boot/dts/imx6ul-liteboard.dts:
+    ...
+    pinctrl_usdhc1: usdhc1grp {
+            fsl,pins = <
+                    MX6UL_PAD_UART1_RTS_B__GPIO1_IO19   0x17059     //同じく、何のPINを->何のPINに設定するって意味。0x17059は電気特性。
+                    MX6UL_PAD_SD1_CMD__USDHC1_CMD       0x17059
+                    MX6UL_PAD_SD1_CLK__USDHC1_CLK       0x10071
+                    MX6UL_PAD_SD1_DATA0__USDHC1_DATA0   0x17059
+                    MX6UL_PAD_SD1_DATA1__USDHC1_DATA1   0x17059
+                    MX6UL_PAD_SD1_DATA2__USDHC1_DATA2   0x17059
+                    MX6UL_PAD_SD1_DATA3__USDHC1_DATA3   0x17059
+                    \--------+---------/  \---+----/    \--+--/
+                             |                |            |
+                             |                |            v
+                             |                |          電気特性
+                             v                v
+                           PIN名称      何のPINに設定するかの意味
+            >;
+    };
+
+    pinctrl_usdhc1_100mhz: usdhc1grp100mhz {
+            fsl,pins = <
+                    MX6UL_PAD_UART1_RTS_B__GPIO1_IO19   0x170b9
+                    MX6UL_PAD_SD1_CMD__USDHC1_CMD       0x170b9
+                    MX6UL_PAD_SD1_CLK__USDHC1_CLK       0x100b9
+                    MX6UL_PAD_SD1_DATA0__USDHC1_DATA0   0x170b9
+                    MX6UL_PAD_SD1_DATA1__USDHC1_DATA1   0x170b9
+                    MX6UL_PAD_SD1_DATA2__USDHC1_DATA2   0x170b9
+                    MX6UL_PAD_SD1_DATA3__USDHC1_DATA3   0x170b9
+            >;
+    };
+
+    ...
+    ...
+    ...
+    &usdhc1 {   //SD card slot1 コントローラnode
+        //pinctrl-names = "default";                                //元
+        pinctrl-names = "default", "state_100mhz", "state_200mhz";  //改造
+        pinctrl-0 = <&pinctrl_usdhc1>;                              //元
+        pinctrl-1 = <&pinctrl_usdhc1_100mhz>;                       //追加
+        pinctrl-2 = <&pinctrl_usdhc1_200mhz>;                       //追加
+        cd-gpios = <&gpio1 19 GPIO_ACTIVE_LOW>;                     //SD card 1のコントローラは、GPIO1_19で、挿入を検知(low)するってことだ。
+        no-1-8-v;
+        keep-power-in-suspend;
+        wakeup-source;
+        status = "okay";
+    };
+    ...
+
+    linux/v5.8/source/arch/arm/boot/dts/imx6ul.dtsi:
+
+        gpio1: gpio@209c000 {
+            compatible = "fsl,imx6ul-gpio", "fsl,imx35-gpio";
+            reg = <0x0209c000 0x4000>;
+            interrupts = <GIC_SPI 66 IRQ_TYPE_LEVEL_HIGH>,
+                         <GIC_SPI 67 IRQ_TYPE_LEVEL_HIGH>;
+            clocks = <&clks IMX6UL_CLK_GPIO1>;
+            gpio-controller;
+            #gpio-cells = <2>;                                  //2整数
+            interrupt-controller;
+            #interrupt-cells = <2>;
+            gpio-ranges = <&iomuxc  0 23 10>, <&iomuxc 10 17 6>, <&iomuxc 16 33 16>;
+        };
+
+
+gpio dts書き方、意味:
+        devicetree/bindings/gpio/fsl-imx-gpio.txt
+
+
+問: dtsにて、SD slot 1のコントローラのカード挿入検知を、
+    GPIO1_19に指定したようですが、driverは、どうやって分かる？
+
+答: of_xxxx_ apiを通じて分かる。
+
+--------------------------------------------------------------------------------
+GPIOと関係あるOF api list:
+--------------------------------------------------------------------------------
+        int of_gpio_named_count(struct device_node *np, const char* propname)
+
+            //このof apiは、引数propnameで指定したプロパティーに、
+            //GPIO informationを、いくつ定義したか、取得する
+            //空のGPIO inforも、統計される
+
+            //例えば、下記のような場合だと、４である。
+            gpios = <0
+                     &gpio1 1 2
+                     0
+                     &gpio2 3 4>;
+
+        int of_gpio_count(struct device_node *np)
+
+            //上と同じだが、このof apiは、"gpios"プロパティーのみを、統計する
+
+
+        int of_get_gpio_flags(struct device_node *np, int index, enum of_gpio_flags *flags)
+
+            //
+
+        int of_get_named_gpio(struct device_node *np, const char *propname, int index)
+
+            //名前により、GPIO番号を取得する。
+            //Kernelでは、GPIO系のAPIらは、みんなGPIO番号を必要とする
+            //GPIOも、kernel内ではただの番号だから
+            //このof apiは、<&gpio5 GPIO_ACTIVE_LOW> のようなプロパティーから、該当のGPIOに変換する。
+
+            //GPIO番号をGetできてからは、requestして、Input/Output等に設定できる。
+
+            //このof apiは、Kernelで、非常によく使う!
+
+        int of_get_gpio(struct device_node *np, int index)                                 
+        ...   
+        ...   
+        ...   
+
+--------------------------------------------------------------------------------
+上記 of_get_named_gpio() は、Kernelで一番よく使うので、例を乗せる:
+--------------------------------------------------------------------------------
+    ...
+    static int __init led_init_drv(void)
+    {
+        //1.nodeを取得するof apiで、まずnodeを取得する
+        nd = of_find_node_by_path("/<my_node_name>");
+        if (nd == NULL) {
+            printk("<my_node_name> node not find!\n");
+            return -EINVAL;
+        } else {
+            printk("<my_node_name> node find!\n");
+        }
+
+        //2.nodeを取得できたら、node内のGPIOプロパティーを読んで、GPIO番号を取得する
+        num = of_get_named_gpio(nd, "led-gpio", 0);
+        if (num < 0) {
+            printk("can't get gpio number\n");
+            return -EINVAL;
+        }
+
+        printk("led-gpio num = %d\n", num);
+
+        //3.gpioをrequestしてみる
+        err = gpio_request(num, "led_gpio");
+        if (err)
+            goto err_free_device;
+
+        //4.例として、gpioを出力として、設定する
+        ret = gpio_direction_output(num, 1);
+        ...
+        ...
+        ...
+    }
+
+    ---------------------------------------- 
+    GPIO制御要約:
+    ---------------------------------------- 
+        1.まず、GPIOが所属しているdts nodeを取得する: of_find_node_by_path() of apiなどで
+        2.次に、GPIO番号を取得する: of_get_named_gpio() of apiで
+        3.次に、GPIOを申請する: gpio_request()で
+        4.次に、GPIOを設定する: gpio_direction_input/output()などで
+        5.もし、入力に設定していたら、gpio_get_value()で、入力値を読める
+        　　　　出力に設定していたら、gpio_set_value()で、出力値を設定できる
+
+        いつもの通りだ。
+
+
+
+--------------------------------------------------------------------------------
+gpio driver
+--------------------------------------------------------------------------------
+
+----------------------------------------
+1. gpiolib
+----------------------------------------
+二つに分けられている:
+    1. SOC Chip社内のGPIO low levelドライバーを書く人向けの部分
+        gpiochip_add()で、kernelに、gpio_chip構造体を登録するのは、SOCメーカーの方でやる
+
+    2. そのSOCを使って、周辺Chipを制御するために、GPIOを操作したい人向けの部分
+
+
+
+--------------------------------------------------------------------------------
+関係:
+
+   使う側                 Core層                                   CPU側の実現
+
+gpio_request()  ------>   gpiolib   <---------------------   STC/Samsung/TI/NXP/Altera...
+                                        各SoCメーカーは、       drivers/gpio/gpio-mxc.c
+                                        gpio_chip構造を
+                                        構築して、登録する
+
+driver path:
+
+    CPU側:
+        drivers/gpio/gpio-mxc.c         //struct gpio_chipをbaseにして、gpio_request()などを実現?
+        drivers/gpio/gpio-<SOC_NAME>.c
+
+    Core層:
+        drivers/gpio/gpiolib-acpi.c
+        drivers/gpio/gpiolib-legacy.c   //struct gpio_descをbaseにして、gpio_request()などを実現?
+        drivers/gpio/gpiolib-of.c
+        drivers/gpio/gpiolib-sysfs.c
+        drivers/gpio/gpiolib.c          //gpiochip_add()は、ここで定義
+        drivers/gpio/gpiolib.h
+
+
+
+gpiolib-legacy.c に、以前から使っていたGPIO関数を定義:　(下記listだけ)
+
+        void gpio_free(unsigned gpio)
+        {
+            gpiod_free(gpio_to_desc(gpio));
+        }
+        EXPORT_SYMBOL_GPL(gpio_free);
+
+
+        int gpio_request_one(unsigned gpio, unsigned long flags, const char *label) {}
+        EXPORT_SYMBOL_GPL(gpio_request_one);
+
+
+        int gpio_request(unsigned gpio, const char *label) {}
+        EXPORT_SYMBOL_GPL(gpio_request);
+
+        int gpio_request_array(const struct gpio *array, size_t num) {}
+        EXPORT_SYMBOL_GPL(gpio_request_array);
+
+
+       void gpio_free_array(const struct gpio *array, size_t num)
+       {
+            while (num--)
+                gpio_free((array++)->gpio);
+       }
+       EXPORT_SYMBOL_GPL(gpio_free_array);
+       
+       
+--------------------------------------------------------------------------------
+gpio_chipを登録する例
+--------------------------------------------------------------------------------
+static struct gpio_chip bcm63xx_gpio_chip = {
+        .label              = "bcm63xx-gpio",
+        .direction_input    = bcm63xx_gpio_direction_input,
+        .direction_output   = bcm63xx_gpio_direction_output,
+        .get                = bcm63xx_gpio_get,
+        .set                = bcm63xx_gpio_set,
+        .base               = 0,
+    };
+
+    int __init bcm63xx_gpio_init(void)
+    {
+        bcm63xx_gpio_out_low_reg_init();
+
+        gpio_out_low = bcm_gpio_readl(gpio_out_low_reg);
+        if (!BCMCPU_IS_6345())
+            gpio_out_high = bcm_gpio_readl(GPIO_DATA_HI_REG);
+
+        bcm63xx_gpio_chip.ngpio = bcm63xx_gpio_count();
+        pr_info("registering %d GPIOs\n", bcm63xx_gpio_chip.ngpio);
+
+        return gpiochip_add(&bcm63xx_gpio_chip);
+    }
+
+
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
