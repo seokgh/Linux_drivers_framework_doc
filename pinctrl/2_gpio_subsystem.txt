@@ -47,7 +47,7 @@ pinctrl subsystemと、gpio subsystemの役割も、ほぼ明らかになった�
 
 では、それぞれを紹介する:
     1_pinctrl_subsystem.txt
-    2_pinctrl_subsystem.txt
+    2_gpio_subsystem.txt
 
 本メモでは、gpio subsystemを解析してみる。
 pinctrl subsystemは、1_pinctrl_subsystem.txtにて、解析する。
