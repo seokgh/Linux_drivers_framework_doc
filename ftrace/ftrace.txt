@@ -1,0 +1,194 @@
+--------------------------------------------------------------------------------
+ftrace
+--------------------------------------------------------------------------------
+ftrace は、Linuxカーネルレベルで、何が起きているかを知るためのDebug Toolだ。
+
+機能:
+    1. Interrupt、スケジュリング、カーネルタイマーなどの動作を、詳しく追跡できる
+    2. 関数フィルターを設定すれば、指定した関数を呼んだ全てのcall stackを出力可能
+    3. 関数を実行してるプロセスが分かる
+    4. 関数が実行された時刻情報が分かる
+    5. ftraceログを有効化しても、負荷が殆どない
+    6. context情報と、CPU番号などが分かる
+
+
+* Securityが強化されたSoC/Kernel Configでは、使えない機能があった。
+
+
+----------------------------------------
+殆どカーネルで、fraceを有効かするには
+----------------------------------------
+.configにて、下記を確認、或いは
+arch/arm(64)/configs/xxx_defconfig にて、確認する
+
+    CONFIG_FTRACE = y
+    CONFIG_DYNAMIC_FTRACE = y       //これを閉じると、性能に影響があるので、必ずOn
+    CONFIG_FUNCTION_TRACE = y
+    CONFIG_FUNCTION_GRAPH_TRACE = y
+    CONFIG_IRQSOFT_TRACE = y
+    CONFIG_SCHED_TRACE = y
+    CONFIG_FUNCTION_PROFILER = y
+    CONFIG_STACK_TRACER = y
+    CONFIG_TRACER_SNAPSHOT = y
+
+menuconfigでも、いろんなtracerを選択できる
+
+----------------------------------------
+ftraceを有効かしたら、directoryを確認する
+----------------------------------------
+古いkernelでは、ftraceを使うためには、debugfsをmountしないといけなかった:
+    $ mkdir /debug
+    $ mount -t debugfs nodev /debug
+    or:
+    $ mount -t debugfs debugfs /sys/kernel/debug
+
+新しいkernelでは、debugfsをmountする必要がなくなった。
+全ての制御Interfaceは、/sys/kernel/debug/tracing にある。
+
+    使用できるtracerを見る: available_tracers
+    現在使用中tracerを見る: current_tracer
+
+    $ cat /sys/kernel/debug/tracing/available_tracers
+        blk
+        mmiotrace
+        branch
+        function_graph
+        wakeup_dl
+        wakeup_rt
+        wakeup
+        preemptirqsoff
+        preemptoff
+        irqsoff
+        function
+
+
+
+
+//$ mount -t debugfs debugfs /sys/kernel/debug
+//$ cd /sys/kernel/debug/tracing
+
+$ cat available_tracers
+    blk function_graph mmiotrace wakeup_rt wakeup
+
+
+$ cd /sys/kernel/debug/tracing
+$ ls -1 events/sched/
+    enable
+    filter
+    sched_kthread_stop
+    sched_kthread_stop_ret
+    sched_migrate_task
+    sched_pi_setprio
+    ...
+----------------------------------------
+Enable events:
+----------------------------------------
+    $ cd /sys/kernel/debug/tracing
+    # Enable ALL events of the group ''sched''
+    $ echo 1 > events/sched/enable
+
+
+----------------------------------------
+Record a trace:
+----------------------------------------
+After enabling the events you want to see, do:
+    $ cd /sys/kernel/debug/tracing
+    # Start recording to the ringbuffer
+    $ echo 1 > tracing_on
+    # Stop recording to the ringbuffer
+    $ echo 0 > tracing_on
+
+
+----------------------------------------
+Analyze a trace:
+----------------------------------------
+You can even do this while recording!
+    $ cd /sys/kernel/debug/tracing
+    # Just print the current content of the ring buffer
+    $ cat trace
+    # or: do a consuming read on the ring buffer
+    $ cat trace_pipe
+
+
+--------------------------------------------------------------------------------
+普通のtracer
+--------------------------------------------------------------------------------
+----------------------------------------
+関数をtracingする
+----------------------------------------
+echo 0 > /sys/kernel/debug/tracing/tracing_on
+echo function > /sys/kernel/debug/tracing/current_tracer
+        ^正
+
+----------------------------------------
+特定関数をtracingする
+----------------------------------------
+echo do_page_fault > /sys/kernel/debug/tracing/set_ftrace_filter
+         ^関数名
+
+    指定しないと、全ての関数をtraceingする
+
+----------------------------------------
+特定CPU IDをtracingする
+----------------------------------------
+echo "cpu_id" > /sys/kernel/debug/tracing/tracing_cpumask
+
+
+
+
+
+----------------------------------------
+tracing start
+----------------------------------------
+echo 1 > /sys/kernel/debug/tracing/tracing_on
+cat /sys/kernel/debug/tracing/trace_pipe | tee /tmp/ftrace.log
+
+----------------------------------------
+tracing off
+----------------------------------------
+echo 0 > /sys/kernel/debug/tracing/tracing_on
+echo nop > /sys/kernel/debug/tracing/current_tracer
+
+
+
+
+
+
+--------------------------------------------------------------------------------
+また別のfunction_graph tracer
+--------------------------------------------------------------------------------
+----------------------------------------
+関数をtracingする
+----------------------------------------
+echo 0 > /sys/kernel/debug/tracing/tracing_on
+echo function_graph > /sys/kernel/debug/tracing/current_tracer
+
+----------------------------------------
+特定PIDをtracingする
+----------------------------------------
+echo 1234 > /sys/kernel/debug/tracing/set_ftrace_pid
+
+    設定しないと、すべてのプロセスをtracingする
+
+
+----------------------------------------
+tracing start
+----------------------------------------
+echo 1 > /sys/kernel/debug/tracing/tracing_on
+cat /sys/kernel/debug/tracing/trace_pipe | tee /tmp/ftrace.log
+
+
+
+
+
+
+--------------------------------------------------------------------------------
+Non-Tracer Tracer
+--------------------------------------------------------------------------------
+Max Stack Tracer:
+Profiling:
+    branches
+    unlikely
+    likely
+    Functions
+Event tracing:
