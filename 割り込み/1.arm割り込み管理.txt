@@ -1,0 +1,450 @@
+--------------------------------------------------------------------------------
+ARM 9(v4) Vector
+--------------------------------------------------------------------------------
+exception vector address:
+    0           : 
+    0xffff0000  : MMU起動したら、存在するException Vectorアドレス
+
+---------------------------------------------------
+linux/v4.19-rc3/source/arch/arm/kernel/entry-armv.S
+---------------------------------------------------
+    .section .vectors, "ax", %progbits              //vectors section
+.L__vectors_start:
+    W(b)    vector_rst                              //vector_stubマクロで実現
+    W(b)    vector_und
+    W(ldr)  pc, .L__vectors_start + 0x1000
+    W(b)    vector_pabt
+    W(b)    vector_dabt
+    W(b)    vector_addrexcptn
+    W(b)    vector_irq
+    W(b)    vector_fiq
+    .data
+    .align  2
+
+---------------------------------------------------
+vector_stubマクロ定義
+---------------------------------------------------
+    .macro  vector_stub, name, mode, correction=0
+        .align  5
+
+vector_\name:
+	.if \correction
+	sub	lr, lr, #\correction
+	.endif
+
+	@
+	@ Save r0, lr_<exception> (parent PC) and spsr_<exception>
+	@ (parent CPSR)
+	@
+	stmia	sp, {r0, lr}		@ save r0, lr
+	mrs	lr, spsr
+	str	lr, [sp, #8]		@ save spsr
+
+	@
+	@ Prepare for SVC32 mode.  IRQs remain disabled.
+	@
+	mrs	r0, cpsr
+	eor	r0, r0, #(\mode ^ SVC_MODE | PSR_ISETSTATE)
+	msr	spsr_cxsf, r0
+
+	@
+	@ the branch table must immediately follow this code
+	@
+	and	lr, lr, #0x0f
+ THUMB(	adr	r0, 1f			)
+ THUMB(	ldr	lr, [r0, lr, lsl #2]	)
+	mov	r0, sp
+ ARM(	ldr	lr, [pc, lr, lsl #2]	)
+	movs	pc, lr			@ branch to handler in SVC mode
+ENDPROC(vector_\name)
+
+
+---------------------------------------------------
+以下は、各Exception入り口(vector_stub マクロ使用)
+---------------------------------------------------
+/*
+ * Interrupt dispatcher
+ */
+	vector_stub	irq, IRQ_MODE, 4
+
+	.long	__irq_usr			    @  0  (USR_26 / USR_32)     //usr mode時に発生した時の入り口
+	.long	__irq_invalid			@  1  (FIQ_26 / FIQ_32)
+	.long	__irq_invalid			@  2  (IRQ_26 / IRQ_32)
+	.long	__irq_svc			    @  3  (SVC_26 / SVC_32)     //svc mode時に発生した時の入り口
+	.long	__irq_invalid			@  4
+    ...
+	.long	__irq_invalid			@  9
+	.long	__irq_invalid			@  a
+	.long	__irq_invalid			@  b
+    ...
+	.long	__irq_invalid			@  f
+
+/*
+ * Data abort dispatcher
+ * Enter in ABT mode, spsr = USR CPSR, lr = USR PC
+ */
+	vector_stub	dabt, ABT_MODE, 8
+
+	.long	__dabt_usr			    @  0  (USR_26 / USR_32)     //このmode時に発生した時の入り口
+	.long	__dabt_invalid			@  1  (FIQ_26 / FIQ_32)
+	.long	__dabt_invalid			@  2  (IRQ_26 / IRQ_32)
+	.long	__dabt_svc			    @  3  (SVC_26 / SVC_32)     //このmode時に発生した時の入り口
+	.long	__dabt_invalid			@  4
+	.long	__dabt_invalid			@  5
+    ...
+	.long	__dabt_invalid			@  9
+	.long	__dabt_invalid			@  a
+	.long	__dabt_invalid			@  b
+    ...
+	.long	__dabt_invalid			@  f
+
+/*
+ * Prefetch abort dispatcher
+ * Enter in ABT mode, spsr = USR CPSR, lr = USR PC
+ */
+	vector_stub	pabt, ABT_MODE, 4
+
+	.long	__pabt_usr			    @  0 (USR_26 / USR_32)     //このmode時に発生した時の入り口
+	.long	__pabt_invalid			@  1 (FIQ_26 / FIQ_32)
+	.long	__pabt_invalid			@  2 (IRQ_26 / IRQ_32)
+	.long	__pabt_svc			    @  3 (SVC_26 / SVC_32)     //このmode時に発生した時の入り口
+	.long	__pabt_invalid			@  4
+    ...
+	.long	__pabt_invalid			@  9
+	.long	__pabt_invalid			@  a
+	.long	__pabt_invalid			@  b
+    ...
+	.long	__pabt_invalid			@  f
+
+/*
+ * Undef instr entry dispatcher
+ * Enter in UND mode, spsr = SVC/USR CPSR, lr = SVC/USR PC
+ */
+	vector_stub	und, UND_MODE
+
+	.long	__und_usr			    @  0 (USR_26 / USR_32)     //このmode時に発生した時の入り口
+	.long	__und_invalid			@  1 (FIQ_26 / FIQ_32)
+	.long	__und_invalid			@  2 (IRQ_26 / IRQ_32)
+	.long	__und_svc			    @  3 (SVC_26 / SVC_32)     //このmode時に発生した時の入り口
+	.long	__und_invalid			@  4
+    ...
+	.long	__und_invalid			@  9
+	.long	__und_invalid			@  a
+	.long	__und_invalid			@  b
+    ...
+	.long	__und_invalid			@  f
+
+	.align	5
+
+
+--------------------------------------------------------------------------------
+usr modeと、svc mode時のIRQ処理を例として説明する
+--------------------------------------------------------------------------------
+__irq_usr:
+     usr_entry                          //現場保存などやるだろ
+     kuser_cmpxchg_check
+     irq_handler                        //IRQを処理する(マクロを呼んでる)
+     get_thread_info tsk
+     mov	why, #0
+     b	ret_to_user_from_irq            //復帰する
+     UNWIND(.fnend		)
+ENDPROC(__irq_usr)
+---------------------------------------- 
+ .align	5
+ __irq_svc:
+ 	svc_entry                           //現場保存などやるだろ
+ 	irq_handler                         //IRQを処理する(マクロを呼んでる)
+ 
+ #ifdef CONFIG_PREEMPT
+ 	ldr	r8, [tsk, #TI_PREEMPT]		@ get preempt count
+ 	ldr	r0, [tsk, #TI_FLAGS]		@ get flags
+ 	teq	r8, #0				@ if preempt count != 0
+ 	movne	r0, #0				@ force flags to 0
+ 	tst	r0, #_TIF_NEED_RESCHED
+ 	blne	svc_preempt
+ #endif
+ 
+ 	svc_exit r5, irq = 1			@ return from exception //復帰する
+  UNWIND(.fnend		)
+ ENDPROC(__irq_svc)
+---------------------------------------- 
+
+
+svc mode/usr mode時のIRQのhandlerは一緒(同じマクロ)だった:  irq_handler
+        --------------------------------------------------------------------------------
+        /*
+         * Interrupt handling.
+         */
+        --------------------------------------------------------------------------------
+        	.macro	irq_handler
+        #ifdef CONFIG_GENERIC_IRQ_MULTI_HANDLER
+        	ldr	r1, =handle_arch_irq    //
+        	mov	r0, sp
+        	badr	lr, 9997f
+        	ldr	pc, [r1]                //つまり、最終的に handle_arch_irq を実行する!
+        #else                           //詳細は下で
+        	arch_irq_handler_default
+        #endif
+
+        9997:
+        	.endm
+        
+        	.macro	pabt_helper
+        	@ PABORT handler takes pt_regs in r2, fault address in r4 and psr in r5
+        #ifdef MULTI_PABORT
+        	ldr	ip, .LCprocfns
+        	mov	lr, pc
+        	ldr	pc, [ip, #PROCESSOR_PABT_FUNC]
+        #else
+        	bl	CPU_PABORT_HANDLER
+        #endif
+        	.endm
+        
+        	.macro	dabt_helper
+        	@
+        	@ Call the processor-specific abort handler:
+        	@
+        	@  r2 - pt_regs
+        	@  r4 - aborted context pc
+        	@  r5 - aborted context psr
+        	@
+        	@ The abort handler must return the aborted address in r0, and
+        	@ the fault status register in r1.  r9 must be preserved.
+        	@
+        #ifdef MULTI_DABORT
+        	ldr	ip, .LCprocfns
+        	mov	lr, pc
+        	ldr	pc, [ip, #PROCESSOR_DABT_FUNC]
+        #else
+        	bl	CPU_DABORT_HANDLER
+        #endif
+        	.endm
+
+
+
+--------------------------------------------------------------------------------
+usr/svc modeでのirqの共通handler
+--------------------------------------------------------------------------------
+__irq_usr
+__irq_svc
+    --->irq_handler
+            ---> handle_arch_irq
+
+
+handle_arch_irqは、関数ポインターだった。なので、実際の指してる関数を調べる:
+
+    linux/v4.19-rc3/source/kernel/irq/handle.c:
+
+    #ifdef CONFIG_GENERIC_IRQ_MULTI_HANDLER
+    int __init set_handle_irq(void (*handle_irq)(struct pt_regs *))
+    {
+    	if (handle_arch_irq)
+    		return -EBUSY;
+    
+    	handle_arch_irq = handle_irq;       //
+    	return 0;
+    }
+    #endif
+
+-------------------------------------------------------------------------------- 
+つまり、
+あらゆるのSoCで、
+set_handle_irq(void (*handle_irq)(struct pt_regs *)) を呼んで、自分のhandlerを登録するはず。
+この関数で登録した関数こそが、IRQ handlerである。
+-------------------------------------------------------------------------------- 
+s3c2440の登録例:
+
+    //linux/v4.19-rc3/source/drivers/irqchip/irq-s3c24xx.c
+
+    static struct s3c_irq_intc * __init s3c24xx_init_intc(struct device_node *np,
+    				       struct s3c_irq_data *irq_data,
+    				       struct s3c_irq_intc *parent,
+    				       unsigned long address)
+    {
+        ...
+        set_handle_irq(s3c24xx_handle_irq);     //
+        ...
+    }
+
+------------------------------------------------------------
+即ち、
+s3c24xx_handle_irq()が、s3c2440の本番のirq handler(C言語段階)であった
+------------------------------------------------------------
+//linux/v4.19-rc3/source/drivers/irqchip/irq-s3c24xx.c
+asmlinkage void __exception_irq_entry s3c24xx_handle_irq(struct pt_regs *regs)
+{
+	do {
+		if (likely(s3c_intc[0]))
+			if (s3c24xx_handle_intc(s3c_intc[0], regs, 0))
+				continue;
+
+		if (s3c_intc[2])
+			if (s3c24xx_handle_intc(s3c_intc[2], regs, 64))
+				continue;
+
+		break;
+	} while (1);
+}
+
+
+//linux/v4.19-rc3/source/drivers/irqchip/irq-s3c24xx.c
+static inline int s3c24xx_handle_intc(struct s3c_irq_intc *intc, struct pt_regs *regs, int intc_offset)
+{
+    pnd = readl_relaxed(intc->reg_intpnd);  //read interrupt controller pnd Regisger
+    ...
+    offset =  __ffs(pnd);                   //pnd値により、offset = hwirqを計算
+    ...
+	handle_domain_irq(intc->domain, intc_offset + offset, regs);
+	return true;
+}
+
+#ifdef CONFIG_HANDLE_DOMAIN_IRQ
+static inline int handle_domain_irq(struct irq_domain *domain, unsigned int hwirq, struct pt_regs *regs)    //linux/v4.19-rc3/source/include/linux/irqdesc.h
+{
+	return __handle_domain_irq(domain, hwirq, true, regs);
+}
+#endif
+
+int __handle_domain_irq(struct irq_domain *domain, unsigned int hwirq, bool lookup, struct pt_regs *regs)   //linux/v4.19-rc3/source/kernel/irq/irqdesc.c
+{
+    irq_enter();
+
+#ifdef CONFIG_IRQ_DOMAIN
+	if (lookup)
+		irq = irq_find_mapping(domain, hwirq);                      //hwirqより、virtual irq numberを計算する
+#endif
+    ...
+    generic_handle_irq(irq);
+    ...
+    irq_exit();
+}
+
+int generic_handle_irq(unsigned int irq)                            //linux/v4.19-rc3/source/kernel/irq/irqdesc.c
+{
+	struct irq_desc *desc = irq_to_desc(irq);
+
+	if (!desc)
+		return -EINVAL;
+	generic_handle_irq_desc(desc);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(generic_handle_irq);
+
+static inline void generic_handle_irq_desc(struct irq_desc *desc)   //linux/v4.19-rc3/source/include/linux/irqdesc.h
+{
+	desc->handle_irq(desc);                                         //irq_desc[virq].handle_irq()をCall!
+}
+
+--------------------------------------------------------------------------------
+irq_desc[NR_IRQS]
+--------------------------------------------------------------------------------
+例えば、S3C2440 SoCは、Peripheralから、下記のIRQs(hwirq)を受け付けられるとする:
+
+        INT_ADC      [31]   <--- hwirq
+        INT_RTC      [30] 
+        INT_SPI1     [29]
+        INT_UART0    [28] 
+        INT_IIC      [27] 
+        INT_USBH     [26] 
+        INT_USBD     [25] 
+        INT_NFCON    [24] 
+        INT_UART1    [23] 
+        INT_SPI0     [22] 
+        INT_SDI      [21] 
+        INT_DMA3     [20] 
+        INT_DMA2     [19] 
+        INT_DMA1     [18] 
+        INT_DMA0     [17] 
+        INT_LCD      [16] 
+        INT_UART2    [15] 
+        INT_TIMER4   [14] 
+        INT_TIMER3   [13] 
+        INT_TIMER2   [12] 
+        INT_TIMER1   [11] 
+        INT_TIMER0   [10]
+        INT_WDT_AC97 [9] 
+        INT_TICK     [8] 
+        nBATT_FLT    [7] 
+        INT_CAM      [6] 
+        EINT8_23     [5] 
+        EINT4_7      [4]    //EINT4~7　四つのIRQのどれかの可能性ある、IRQ Shareと似てて、*action listに、四つ作って対応する。
+        EINT3        [3] 
+        EINT2        [2] 
+        EINT1        [1] 
+        EINT0        [0]
+
+これらのirqは、irq handlerがそれぞれ違う。kernelは、どう管理する？
+struct irq_desc[NR_IRQS]で、管理する。
+
+struct irq_desc[NR_IRQS]:  <--- virtual irq number
++------------------------+----------------------------------------------+------------------------------+------------------------+------------------------+
+|                        | struct irq_desc {                            |                              |                        |                        |
+|                        | 	struct irq_common_data	irq_common_data;    |                              |                        |                        |
+|                        | 	struct irq_data		irq_data;------------------------+                     |                        |                        |
+|        ...             |    irq_flow_handler_t	handle_irq;------------------|------+   ...        |        ...             |        ...             |
+|                        |    ...                                       |        |      |              |                        |                        |
+|                        |    struct irqaction    *action; /* IRQ action list */ |      |              |                        |                        |
+|                        |    ...                  |                    |        |      |              |                        |                        |
+|                        | }               +-------+                    |        |      |              |                        |                        |
++------------------------+-----------------|----------------------------+--------|------|--------------+------------------------+------------------------+
+                                           |                                     |      v 
+                                           |                                     | このIRQの処理関数だ:
+                           +---------------v--------------------+                |     1)私たちがaction listに書く本当のhandlerを呼ぶ
+                           | struct irqaction {                 |                |     2)irq_data.irq_chip 内の関数らでIRQをクリアする(SoC密接処理:カプセル化)
+                           | 	   irq_handler_t	handler;    |                | なので、我らのhandlerでは、割り込み処理内容のみに、集中すれば良い
+                           | 	   void			    *dev_id;    |                |
+                           |     ...                            |                |
+                           | 	   struct irqaction	*next;      |                |  +---------------------------------------+
+                           |     ...                  |         |                +--> struct irq_data {                     |
+                           | }                        |         |                   | 	u32		mask;                       |
+                           +--------------------------|---------+                   | 	unsigned int	irq;                |
+                                                      |                             | 	unsigned long	hwirq;              |
+                                            +---------+ IRQ Shared時                | 	struct irq_common_data	*common;    |
+                                            |                                       | 	struct irq_chip		*chip;--------------+
+                                            |                                       | 	struct irq_domain	*domain;        |   |
+                           +----------------v-------------------+                   | #ifdef	CONFIG_IRQ_DOMAIN_HIERARCHY |   |
+                           | struct irqaction {                 |                   | 	struct irq_data		*parent_data;   |   |
+                           | 	   irq_handler_t	handler;    |                   | #endif                                |   |
+                           | 	   void			    *dev_id;    |                   | 	void	*chip_data;                 |   |
+                           |     ...                            |                   | };                                    |   |
+                           | 	   struct irqaction	*next;      |                   +---------------------------------------+   |
+                           |     ...                            |                                                               v
+                           | }                                  |                              // SoC Register操作(irq mask/clear/enable/disable...)
+                           +------------------------------------+                              +--------------------------------------------------------+
+                                                                                               |struct irq_chip {                                       |
+                                                                                               |  ...                                                   |
+                                                                                               |  unsigned int	(*irq_startup)(struct irq_data *data);  |
+                                                                                               |  void	(*irq_shutdown)(struct irq_data *data);         |
+                                                                                               |                                                        |
+                                                                                               |  void	(*irq_enable)(struct irq_data *data);           |
+                                                                                               |  void	(*irq_disable)(struct irq_data *data);          |
+                                                                                               |  void	(*irq_ack)(struct irq_data *data);              |
+                                                                                               |              ^普段は、この関数内で、IRQクリアする!     |
+                                                                                               |                                                        |
+                                                                                               |  void	(*irq_mask)(struct irq_data *data);             |
+                                                                                               |  void	(*irq_mask_ack)(struct irq_data *data);         |
+                                                                                               |  void	(*irq_unmask)(struct irq_data *data);           |
+                                                                                               |  void	(*irq_eoi)(struct irq_data *data);              |
+                                                                                               |  ...                                                   |
+                                                                                               +--------------------------------------------------------+
+                        * IRQ share:
+                            *actionはlistなので、share irqをサポートできる。
+                            share irq時には、すべてのhandlerを、順に実行するしかない。
+                            各自handler内で、自分のIRQなのか、判断する。
+--------------------------------------------------------------------------------
+IRQ処理まとめ:
+--------------------------------------------------------------------------------
+IRQ発生
+    vector_irq
+	    __irq_usr/__irq_svc                         //usrモードも、svcモード際にもIRQ発生可、現場保存など
+             usr_entry/svc_entry
+ 	           irq_handler                         //IRQ処理マクロ
+        	       handle_arch_irq                 //関数ポインター実行
+                   s3c24xx_handle_irq()            //関数ポインターが指す初のC関数(SoC毎違う)
+                       初のC関数にて、Interrupt Controllerのレジスタを読んで、hwirq番号を確定する
+                            hwirq から irq_desc[NR_IRQS] を確定(index: virtual irq number)
+                               irq_desc[x].handle_irq()を呼ぶ
+                                   1)私たちがaction listに書く本当のhandlerを呼ぶ(我らがやるべきことは、これだけ)
+                                   2)irq_data.irq_chip 内の関数らでIRQをクリアする(Registerを操作するSoC密接処理を、ここに集中)
+--------------------------------------------------------------------------------
+
