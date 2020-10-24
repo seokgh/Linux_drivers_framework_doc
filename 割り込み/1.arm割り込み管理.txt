@@ -67,10 +67,10 @@ ENDPROC(vector_\name)
  */
 	vector_stub	irq, IRQ_MODE, 4
 
-	.long	__irq_usr			    @  0  (USR_26 / USR_32)     //usr mode時に発生した時の入り口
+	.long	__irq_usr			@  0  (USR_26 / USR_32)     //usr mode時に発生した時の入り口
 	.long	__irq_invalid			@  1  (FIQ_26 / FIQ_32)
 	.long	__irq_invalid			@  2  (IRQ_26 / IRQ_32)
-	.long	__irq_svc			    @  3  (SVC_26 / SVC_32)     //svc mode時に発生した時の入り口
+	.long	__irq_svc			@  3  (SVC_26 / SVC_32)     //svc mode時に発生した時の入り口
 	.long	__irq_invalid			@  4
     ...
 	.long	__irq_invalid			@  9
@@ -85,10 +85,10 @@ ENDPROC(vector_\name)
  */
 	vector_stub	dabt, ABT_MODE, 8
 
-	.long	__dabt_usr			    @  0  (USR_26 / USR_32)     //このmode時に発生した時の入り口
+	.long	__dabt_usr			@  0  (USR_26 / USR_32)     //このmode時に発生した時の入り口
 	.long	__dabt_invalid			@  1  (FIQ_26 / FIQ_32)
 	.long	__dabt_invalid			@  2  (IRQ_26 / IRQ_32)
-	.long	__dabt_svc			    @  3  (SVC_26 / SVC_32)     //このmode時に発生した時の入り口
+	.long	__dabt_svc			@  3  (SVC_26 / SVC_32)     //このmode時に発生した時の入り口
 	.long	__dabt_invalid			@  4
 	.long	__dabt_invalid			@  5
     ...
@@ -104,10 +104,10 @@ ENDPROC(vector_\name)
  */
 	vector_stub	pabt, ABT_MODE, 4
 
-	.long	__pabt_usr			    @  0 (USR_26 / USR_32)     //このmode時に発生した時の入り口
+	.long	__pabt_usr			@  0 (USR_26 / USR_32)     //このmode時に発生した時の入り口
 	.long	__pabt_invalid			@  1 (FIQ_26 / FIQ_32)
 	.long	__pabt_invalid			@  2 (IRQ_26 / IRQ_32)
-	.long	__pabt_svc			    @  3 (SVC_26 / SVC_32)     //このmode時に発生した時の入り口
+	.long	__pabt_svc			@  3 (SVC_26 / SVC_32)     //このmode時に発生した時の入り口
 	.long	__pabt_invalid			@  4
     ...
 	.long	__pabt_invalid			@  9
@@ -122,10 +122,10 @@ ENDPROC(vector_\name)
  */
 	vector_stub	und, UND_MODE
 
-	.long	__und_usr			    @  0 (USR_26 / USR_32)     //このmode時に発生した時の入り口
+	.long	__und_usr			@  0 (USR_26 / USR_32)     //このmode時に発生した時の入り口
 	.long	__und_invalid			@  1 (FIQ_26 / FIQ_32)
 	.long	__und_invalid			@  2 (IRQ_26 / IRQ_32)
-	.long	__und_svc			    @  3 (SVC_26 / SVC_32)     //このmode時に発生した時の入り口
+	.long	__und_svc			@  3 (SVC_26 / SVC_32)     //このmode時に発生した時の入り口
 	.long	__und_invalid			@  4
     ...
 	.long	__und_invalid			@  9
@@ -182,7 +182,7 @@ svc mode/usr mode時のIRQのhandlerは一緒(同じマクロ)だった:  irq_ha
         	mov	r0, sp
         	badr	lr, 9997f
         	ldr	pc, [r1]                //つまり、最終的に handle_arch_irq を実行する!
-        #else                           //詳細は下で
+        #else                           	//詳細は下で
         	arch_irq_handler_default
         #endif
 
@@ -311,7 +311,7 @@ int __handle_domain_irq(struct irq_domain *domain, unsigned int hwirq, bool look
 
 #ifdef CONFIG_IRQ_DOMAIN
 	if (lookup)
-		irq = irq_find_mapping(domain, hwirq);                      //hwirqより、virtual irq numberを計算する
+		irq = irq_find_mapping(domain, hwirq);               //hwirqより、virtual irq numberを計算する
 #endif
     ...
     generic_handle_irq(irq);
@@ -332,7 +332,7 @@ EXPORT_SYMBOL_GPL(generic_handle_irq);
 
 static inline void generic_handle_irq_desc(struct irq_desc *desc)   //linux/v4.19-rc3/source/include/linux/irqdesc.h
 {
-	desc->handle_irq(desc);                                         //irq_desc[virq].handle_irq()をCall!
+	desc->handle_irq(desc);                                     //irq_desc[virq].handle_irq()をCall!
 }
 
 --------------------------------------------------------------------------------
