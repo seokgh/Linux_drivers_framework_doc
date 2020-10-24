@@ -419,7 +419,7 @@ struct irq_desc[NR_IRQS]:  <--- virtual irq number
                                                                                                |  void	(*irq_enable)(struct irq_data *data);           |
                                                                                                |  void	(*irq_disable)(struct irq_data *data);          |
                                                                                                |  void	(*irq_ack)(struct irq_data *data);              |
-                                                                                               |              ^普段は、この関数内で、IRQクリアする!              |
+                                                                                               |              ^普段は、この関数内で、IRQクリアする!          |
                                                                                                |                                                        |
                                                                                                |  void	(*irq_mask)(struct irq_data *data);             |
                                                                                                |  void	(*irq_mask_ack)(struct irq_data *data);         |
