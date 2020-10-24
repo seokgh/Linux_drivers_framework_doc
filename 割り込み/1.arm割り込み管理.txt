@@ -379,9 +379,9 @@ struct irq_desc[NR_IRQS]で、管理する。
 struct irq_desc[NR_IRQS]:  <--- virtual irq number
 +------------------------+----------------------------------------------+------------------------------+------------------------+------------------------+
 |                        | struct irq_desc {                            |                              |                        |                        |
-|                        | 	struct irq_common_data	irq_common_data;    |                              |                        |                        |
-|                        | 	struct irq_data		irq_data;------------------------+                     |                        |                        |
-|        ...             |    irq_flow_handler_t	handle_irq;------------------|------+   ...        |        ...             |        ...             |
+|                        |    struct irq_common_data	irq_common_data;|                              |                        |                        |
+|                        |    struct irq_data	irq_data;------------------------+                     |                        |                        |
+|        ...             |    irq_flow_handler_t    handle_irq;------------------|------+   ...        |        ...             |        ...             |
 |                        |    ...                                       |        |      |              |                        |                        |
 |                        |    struct irqaction    *action; /* IRQ action list */ |      |              |                        |                        |
 |                        |    ...                  |                    |        |      |              |                        |                        |
@@ -391,23 +391,23 @@ struct irq_desc[NR_IRQS]:  <--- virtual irq number
                                            |                                     | このIRQの処理関数だ:
                            +---------------v--------------------+                |     1)私たちがaction listに書く本当のhandlerを呼ぶ
                            | struct irqaction {                 |                |     2)irq_data.irq_chip 内の関数らでIRQをクリアする(SoC密接処理:カプセル化)
-                           | 	   irq_handler_t	handler;    |                | なので、我らのhandlerでは、割り込み処理内容のみに、集中すれば良い
-                           | 	   void			    *dev_id;    |                |
+                           | 	   irq_handler_t	handler;|                | なので、我らのhandlerでは、割り込み処理内容のみに、集中すれば良い
+                           | 	   void			*dev_id;|                |
                            |     ...                            |                |
-                           | 	   struct irqaction	*next;      |                |  +---------------------------------------+
-                           |     ...                  |         |                +--> struct irq_data {                     |
-                           | }                        |         |                   | 	u32		mask;                       |
-                           +--------------------------|---------+                   | 	unsigned int	irq;                |
-                                                      |                             | 	unsigned long	hwirq;              |
-                                            +---------+ IRQ Shared時                | 	struct irq_common_data	*common;    |
-                                            |                                       | 	struct irq_chip		*chip;--------------+
-                                            |                                       | 	struct irq_domain	*domain;        |   |
+                           | 	   struct irqaction	*next;  |                |  +---------------------------------------+
+                           |     ...                      |     |                +--> struct irq_data {                     |
+                           | }                            |     |                   | 	u32		mas                 |
+                           +------------------------------|-----+                   | 	unsigned int	irq;                |
+                                                          |                         | 	unsigned long	hwirq;              |
+                                            +-------------+ IRQ Shared時             |struct irq_common_data	*common;    |
+                                            |                                       | 	struct irq_chip	    *chip;--------------+
+                                            |                                       | 	struct irq_domain	*domain;    |   |
                            +----------------v-------------------+                   | #ifdef	CONFIG_IRQ_DOMAIN_HIERARCHY |   |
-                           | struct irqaction {                 |                   | 	struct irq_data		*parent_data;   |   |
-                           | 	   irq_handler_t	handler;    |                   | #endif                                |   |
-                           | 	   void			    *dev_id;    |                   | 	void	*chip_data;                 |   |
+                           | struct irqaction {                 |                   | 	struct irq_data	    *parent_data;   |   |
+                           | 	   irq_handler_t    handler;    |                   | #endif                                |   |
+                           | 	   void             *dev_id;    |                   | 	void	*chip_data;                 |   |
                            |     ...                            |                   | };                                    |   |
-                           | 	   struct irqaction	*next;      |                   +---------------------------------------+   |
+                           | 	   struct irqaction  *next;     |                   +---------------------------------------+   |
                            |     ...                            |                                                               v
                            | }                                  |                              // SoC Register操作(irq mask/clear/enable/disable...)
                            +------------------------------------+                              +--------------------------------------------------------+
@@ -419,7 +419,7 @@ struct irq_desc[NR_IRQS]:  <--- virtual irq number
                                                                                                |  void	(*irq_enable)(struct irq_data *data);           |
                                                                                                |  void	(*irq_disable)(struct irq_data *data);          |
                                                                                                |  void	(*irq_ack)(struct irq_data *data);              |
-                                                                                               |              ^普段は、この関数内で、IRQクリアする!     |
+                                                                                               |              ^普段は、この関数内で、IRQクリアする!              |
                                                                                                |                                                        |
                                                                                                |  void	(*irq_mask)(struct irq_data *data);             |
                                                                                                |  void	(*irq_mask_ack)(struct irq_data *data);         |
@@ -440,11 +440,11 @@ IRQ発生
              usr_entry/svc_entry
  	           irq_handler                         //IRQ処理マクロ
         	       handle_arch_irq                 //関数ポインター実行
-                   s3c24xx_handle_irq()            //関数ポインターが指す初のC関数(SoC毎違う)
-                       初のC関数にて、Interrupt Controllerのレジスタを読んで、hwirq番号を確定する
-                            hwirq から irq_desc[NR_IRQS] を確定(index: virtual irq number)
-                               irq_desc[x].handle_irq()を呼ぶ
-                                   1)私たちがaction listに書く本当のhandlerを呼ぶ(我らがやるべきことは、これだけ)
-                                   2)irq_data.irq_chip 内の関数らでIRQをクリアする(Registerを操作するSoC密接処理を、ここに集中)
+                           s3c24xx_handle_irq()            //関数ポインターが指す、初のC関数(SoC毎違う)
+                           //初のC関数にて、Interrupt Controllerのレジスタを読んで、hwirq番号を確定する
+                               hwirq から irq_desc[NR_IRQS] を確定(index: virtual irq number)
+                                   irq_desc[x].handle_irq()を呼ぶ
+                                       1)私たちがaction listに書く本当のhandlerを呼ぶ(我らがやるべきことは、これだけ)
+                                       2)irq_data.irq_chip 内の関数らでIRQをクリアする(Registerを操作するSoC密接処理を、ここに集中)
 --------------------------------------------------------------------------------
 
