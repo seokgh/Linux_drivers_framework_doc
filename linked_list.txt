@@ -166,7 +166,7 @@ list_add_tail(struct list_head *new, struct list_head *head)	//引数1: 追加�
 ----------------------------------------
 LIST_HEAD(head);     		/* 要素の挿入先 */                                                                                  
 LIST_HEAD(new_list);		/* 新たに追加したいList構造 */
-list_add(&new_list, &head);	/* headの後ろにnew_listを連結(headerに挿入する) */
+list_add(&new_list, &head);	/* headの後ろにnew_listを連結(nodeらの中では、一番最初に挿入) */
 
 	実行前:
 
