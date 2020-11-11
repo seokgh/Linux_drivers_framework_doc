@@ -140,18 +140,17 @@ LIST_HEAD マクロ
 
 LIST_HEAD( my_list );		//静的初期化 (動的Listを初期化するマクロ　INIT_LIST_HEAD より、INIT_ が無い)
 
-	drivers/dma/stm32-mdma.c:	LIST_HEAD(head);
-	drivers/dma/s3c24xx-dma.c:	LIST_HEAD(head);
-	drivers/dma/tegra210-adma.c:	LIST_HEAD(head);
-	drivers/dma/sf-pdma/sf-pdma.c:	LIST_HEAD(head);
-
 	//マクロ定義
 	#define LIST_HEAD(name) \                        
 	    struct list_head name = LIST_HEAD_INIT(name) 
 	
 	#define LIST_HEAD_INIT(name) { &(name), &(name) }
 
-
+	//ex
+	drivers/dma/stm32-mdma.c:	LIST_HEAD(head);
+	drivers/dma/s3c24xx-dma.c:	LIST_HEAD(head);
+	drivers/dma/tegra210-adma.c:	LIST_HEAD(head);
+	drivers/dma/sf-pdma/sf-pdma.c:	LIST_HEAD(head);
 
 --------------------------------------------------------------------------------
 List構造に要素を追加
@@ -307,21 +306,11 @@ list_del(&last_list);     /* 削除したいList構造のポインタを渡す *
 --------------------------------------------------------------------------------
 List構造からデータを参照方法
 --------------------------------------------------------------------------------
-list_for_each(pos, head)
-list_entry(ptr,type,member)
-
-list_for_each_entry(pos, head, member)
-...
-
-
 ----------------------------------------
-list_for_each(pos, head)
+list_for_each(pos, head)	//Listを巡回(순회)するマクロ
 ----------------------------------------
-list_for_each() マクロは、Listを巡回(순회)する
-
 	#define list_for_each(pos, head) \
 	        for (pos = (head)->next; pos != (head); pos = pos->next)
-
 
 	pos:	インジケーターで、最初のアイテム（head->next）を指す
     	head:	listのheader(一番前)で、listのStart Addrである
@@ -329,24 +318,23 @@ list_for_each() マクロは、Listを巡回(순회)する
 	posを起点として、最後までloopする。終了条件は、posが再びheadを指している場合。一周したことを表すから。
 
 ----------------------------------------
-list_entry(ptr,type,member)
+list_entry(ptr,type,member)	//構造体の中にあるメンバーのPointerから、
+				//そのメンバーの構造体の中の位置(オフセット)を引き算することで、その構造体の先頭アドレスを得て、それに、構造体へのキャストをして、
+				//構造体のポインターに変えるマクロ
 ----------------------------------------
 #define list_entry(ptr,type,member)     \
     container_of(ptr, type, member)					//第一引数ptrには構造体のメンバポインタ、
 									//第二引数typeには第一引数ptrが指す構造体メンバを含む構造体名、
 									//第三引数memberには第一引数ptrが指す構造体メンバの名称を渡す。
+									
 	#define container_of(ptr, type, member) ({                      \
 	        const typeof( ((type *)0)->member ) *__mptr = (ptr);    \
 	               (type *)( (char *)__mptr - offsetof(type,member) );})
 	
 	#define offsetof(TYPE, MEMBER) ((unsigned int) &((TYPE *)0)->MEMBER)
 	
-	
-	offsetof()は、
-		構造の開始Addrに対する構造内のメンバーのアドレスの距離を知るために使用され、
-	
-	container_of()は、
-		メンバーのAddrがわかっている限り、構造の開始アドレスをさらに計算するために使用されます。
+	//offsetof()は、構造の開始Addrに対する構造内のメンバーのアドレスの距離を知るために使用され、
+	//container_of()は、メンバーのAddrがわかっている限り、構造の開始アドレスをさらに計算するために使用されます。
 
 
 --------------------------------------------------------------------------------
