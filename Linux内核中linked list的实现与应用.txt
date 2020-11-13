@@ -4,36 +4,32 @@
 //参考资料：Linux操作系统原理与应用（第2版）    陈莉君、康华 编著
 /////////////////////////////////////////////
 
-
-
- 链表（循环双向链表）是Linux内核中最简单、最常用的一种数据结构。
+循环双向链表是Linux内核中最简单、最常用的一种数据结构。
        
        1、链表的定义
             struct list_head {
                 struct list_head *next, *prev;
             }
-           这个不含数据域的链表,可以嵌入到任何数据结构中,例如可按如下方式定义含有数据域的链表：
+            //这个不含数据域的链表,可以嵌入到任何数据结构中,例如如下定义含有数据域的链表：
             struct my_list {
                 void  * mydata;
                 struct list_head  list;
             } ;
 
        2、链表的声明和初始化宏
-            struct list_head 只定义了链表结点,并没有专门定义链表头.那么一个链表结点是如何建立起来的？
-内核代码 list.h 中定义了两个宏：
-            #defind  LIST_HEAD_INIT(name)    { &(name), &(name) }      //仅初始化
+            struct list_head 只定义了链表结点, 并没有专门定义链表头. 那么一个链表结点是如何建立起来的？
+            内核代码 list.h 中定义了两个宏:
+            #defind  LIST_HEAD_INIT(name)    { &(name), &(name) }                       //仅初始化
             #defind  LIST_HEAD(name)     struct list_head  name = LIST_HEAD_INIT(name)  //声明并初始化
            
-            如果要声明并初始化链表头mylist_head，则直接调用：LIST_HEAD(mylist_head)，之后，
-mylist_head的next、prev指针都初始化为指向自己。这样，就有了一个带头结点的空链表。
+            如果要声明并初始化链表头mylist_head，则直接调用：LIST_HEAD(mylist_head)，之后， mylist_head的next、prev指针都初始化为指向自己。这样，就有了一个带头结点的空链表。
 
              判断链表是否为空的函数：
-             static inline int list_empty(const struct list_head  * head) {
+             static inline int list_empty(const struct list_head  * head) {    //返回1表示链表为空，0表示不空
                   return head->next  ==  head;
-              }    //返回1表示链表为空，0表示不空
+             }
 
       3、在链表中增加一个结点
-          （内核代码中，函数名前加两个下划线表示内部函数）
             static inline void   __list_add(struct list_head *new, struct list_head *prev, struct list_head *next)
             {
                      next -> prev = new ;
@@ -42,8 +38,7 @@ mylist_head的next、prev指针都初始化为指向自己。这样，就有了�
                      prev -> next = new ;
             }  
           
-            list.h 中增加结点的两个函数为：
-           （链表是循环的，可以将任何结点传递给head，调用这个内部函数以分别在链表头和尾增加结点）
+            list.h 中增加结点的两个函数为: （链表是循环的，可以将任何结点传递给head，调用这个内部函数以分别在链表头和尾增加结点）
             static inline void list_add(struct list_head *new, struct llist_head *head)
             {
                     __list_add(new, head, head -> next) ;
@@ -53,20 +48,20 @@ mylist_head的next、prev指针都初始化为指向自己。这样，就有了�
                      __list_add(new, head -> prev, head) ;
             }
             附：给head传递第一个结点，可以用来实现一个队列，传递最后一个结点，可以实现一个栈。
-            static 加在函数前，表示这个函数是静态函数，其实际上是对作用域的限制，指该函数作用域仅局限
-           于本文件。所以说，static 具有信息隐蔽的作用。而函数前加 inline 关键字的函数，叫内联函数，表
-           示编译程序在调用这个函数时，立即将该函数展开。
+
             
     4、 遍历链表
            list.h 中定义了如下遍历链表的宏：
            #define   list_for_each(pos, head)    for(pos = (head)-> next ;  pos != (head) ;  pos = pos -> next)  
-           这种遍历仅仅是找到一个个结点的当前位置，那如何通过pos获得起始结点的地址，从而可以引用结
-点的域？list.h 中定义了 list_entry 宏：
+           这种遍历仅仅是找到一个个结点的当前位置，那如何通过pos获得起始结点的地址，从而可以引用结点的域？
+           
+           list.h 中定义了 list_entry 宏：
            #define   list_entry( ptr, type, member )  \
               ( (type *) ( (char *) (ptr)  - (unsigned long) ( &( (type *)0 )  ->  member ) ) )
-          分析：(unsigned long) ( &( (type *)0 )  ->  member ) 把 0 地址转化为 type 结构的指针，然后获取该
-          结构中 member 域的指针，也就是获得了 member 在type 结构中的偏移量。其中  (char *) (ptr) 求
-         出的是 ptr 的绝对地址，二者相减，于是得到 type 类型结构体的起始地址，即起始结点的地址。
+              
+           分析：(unsigned long) ( &( (type *)0 )  ->  member ) 把 0 地址转化为 type 结构的指针，然后获取该
+                结构中 member 域的指针，也就是获得了 member 在type 结构中的偏移量。其中  (char *) (ptr) 求
+                出的是 ptr 的绝对地址，二者相减，于是得到 type 类型结构体的起始地址，即起始结点的地址。
 
    5、链表的应用
          一个用以创建、增加、删除和遍历一个双向链表的Linux内核模块
