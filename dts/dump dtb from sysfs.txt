@@ -1,0 +1,2 @@
+dump dtb from sysfs:
+    dtc -I dtb -O dts -o dump_sys_firmware_fdt.dts /sys/firmware/fdt
