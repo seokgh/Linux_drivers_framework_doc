@@ -88,8 +88,27 @@ Devicetree Overlay ファイルの書き方
 ---------------------------------------------------------
 Devicetree Overlayの実行方法
 ---------------------------------------------------------
+dtc コマンド:
+
+    $ dtc -@ -I dts -O dtb -o my_overlay-overlay.dts my_overlay.dtbo
+
+    //The -@ is needed for overlays as it prevents the compiler from looking up the references from the source file, which it - of course - wouldn't find.
 
 
+dtoverlay コマンド:
+
+    dtoverlay is used to dynamically load device trees.
+
+    dtoverlay -a to list all available overlays
+    dtoverlay -l to list the currently applied overlays
+    dtoverlay -h <overlay_name> to get information about any overlay, its parameters and possible values
+    dtoverlay <overlay_name> <param_name>=<param_value> to add an overlay with some parameters
+    dtoverlay -r <overlay_name> to remove a previously loaded overlay
+
+    Note:
+        dtoverlay -l only lists dynamically loaded modules and only those can be removed with dtoverlay -r.
+        Anything that was loaded via /boot/config.txt is considered part of the base device tree.
+        Some overlays have to be added this way and can't be loaded by dtoverlay.
 
 ---------------------------------------------------------
 オーバーレイ削除
