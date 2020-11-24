@@ -10,7 +10,7 @@ sleep 1
 echo "events disabled"
 
 
-# See available_filter_functions file (List of Ftraceable function list)
+# See /sys/kernel/debug/tracing/available_filter_functions  file (Ftraceable function list)
 echo  my_fb_irq_handler > /sys/kernel/debug/tracing/set_ftrace_filter
 sleep 1
 echo "set_ftrace_filter set ok"
