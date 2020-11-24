@@ -126,7 +126,7 @@ echo function > /sys/kernel/debug/tracing/current_tracer
 echo do_page_fault > /sys/kernel/debug/tracing/set_ftrace_filter
          ^関数名
 
-    指定しないと、全ての関数をtraceingする
+    指定しないと、全ての関数をtraceingする ---> Linux systemが死んでしまう
 
 ----------------------------------------
 特定CPU IDをtracingする
