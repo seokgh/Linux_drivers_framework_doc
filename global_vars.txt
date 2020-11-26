@@ -1,0 +1,38 @@
+--------------------------------------------------------------------------------
+global vars
+--------------------------------------------------------------------------------
+init_task:
+	psコマンドを入力した時、Kernelは、このGlobal変数にアクセスして、
+	タスク情報を出力する
+	具体的には init_task.tasks 連結LISTメンバーを通じてである。
+
+	...
+	.tasks = LIST_HEAD_INIT(init_task.tasks);	//init/init_task.c
+	...
+
+kthread_create_list:					//kernel/kthread.c
+	linked list
+
+	kthread_create_info:
+
+
+of_root:
+
+jiffies:
+
+HZ:
+
+mem_map:
+
+chrdevs[]:
+
+current:
+	#define current (get_current())  
+	static inline struct task_struct *get_current(void) { }
+
+intc_desc_list:
+intc_parent_list:
+
+irq_desc[NR_IRQS]:
+
+
