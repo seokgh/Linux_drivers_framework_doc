@@ -19,6 +19,8 @@ echo "function_graph tracer enabled"
 
 echo bcm2835_mmc_irq > /sys/kernel/debug/tracing/set_ftrace_filter
 sleep 1
+echo bcm2835_mmc_tasklet_finish > /sys/kernel/debug/tracing/set_ftrace_filter
+sleep 1
 echo "set_ftrace_filter enabled"
 
 echo 1 > /sys/kernel/debug/tracing/events/sched/sched_switch/enable
