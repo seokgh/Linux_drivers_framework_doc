@@ -1,3 +1,6 @@
+----------------------------------------------------------------------
+sudo cat /sys/kernel/debug/tracing/available_filter_functions
+----------------------------------------------------------------------
 asm_do_IRQ
 handle_fiq_as_nmi
 do_IPI
