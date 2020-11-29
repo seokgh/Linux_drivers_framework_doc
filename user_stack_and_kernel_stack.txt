@@ -26,7 +26,5 @@ pi@raspberrypi:~ $
 --------------------------------------------------------------------
 kernel mode stack
 --------------------------------------------------------------------
-$ getconf PAGESIZE    //
-4096
-$ getconf PAGE_SIZE
-4096
+$ getconf -a | grep PAGE_SIZE       //or getconf -a | grep PAGESIZE
+PAGE_SIZE       4096
