@@ -28,3 +28,13 @@ kernel mode stack
 --------------------------------------------------------------------
 $ getconf -a | grep PAGE_SIZE       //or getconf -a | grep PAGESIZE
 PAGE_SIZE       4096
+
+
+$ sudo grep -i pagesize /proc/1/smaps   //process 1 = systemd(init)
+KernelPageSize:        4 kB
+MMUPageSize:           4 kB
+KernelPageSize:        4 kB
+MMUPageSize:           4 kB
+KernelPageSize:        4 kB
+MMUPageSize:           4 kB
+...
