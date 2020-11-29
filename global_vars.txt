@@ -15,6 +15,16 @@ kthread_create_list:					//kernel/kthread.c
 	kthread_create_info:
 
 
+7 workqueue:
+	struct workqueue_struct *system_wq;
+	struct workqueue_struct *system_highpri_wq;
+	struct workqueue_struct *system_long_wq;
+	struct workqueue_struct *system_unbound_wq;
+	struct workqueue_struct *system_freezable_wq;
+	struct workqueue_struct *system_power_efficient_wq;
+	struct workqueue_struct *system_freezable_power_efficient_wq;
+
+
 of_root:
 
 jiffies:
