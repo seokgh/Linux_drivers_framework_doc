@@ -11,9 +11,9 @@ ranges = <子addr1 親addr1 子addr_size1
           子addr2 親addr2 子addr_size2
           子addr3 親addr3 子addr_size3
           子addr4 親addr4 子addr_size4>;
-
-    
-    各フィールドのサイズ(cell個数)は順に、＜子の#address-cells値＞、＜親の#address-cells値＞、＜子の#size-cells値＞　によって、決まります。
+             ^       ^       ^
+             |       |       |
+             各フィールドのサイズ(cell個数)は順に、＜子の#address-cells値＞、＜親の#address-cells値＞、＜子の#size-cells値＞　によって、決まります。
 
 
 rangesはアドレス変換リストです。変換リストの各エントリは、
