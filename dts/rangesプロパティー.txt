@@ -12,12 +12,12 @@ ranges = <子addr1 親addr1 子addr_size1
           子addr3 親addr3 子addr_size3
           子addr4 親addr4 子addr_size4>;
 
-          
-rangesはアドレス変換のリストです。
-範囲テーブルの各エントリは、
-    子アドレス、親アドレス、および子アドレススペース内の領域のサイズを含むタプルです。
+    
+    各フィールドのサイズ(cell個数)は順に、＜子の#address-cells値＞、＜親の#address-cells値＞、＜子の#size-cells値＞　によって、決まります。
 
-    各フィールドのサイズは、子の#address-cells値、親の#address-cells値、子の#size-cells値によって、決まります。
+
+rangesはアドレス変換リストです。変換リストの各エントリは、
+    ＜子アドレス＞、＜親アドレス＞、＜子アドレススペース内の領域のサイズ＞です。
 
 親アドレス空間と、子アドレス空間が同一の場合、下記のように、空のrangesプロパティを追加できます: 
       ranges;
