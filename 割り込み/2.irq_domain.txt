@@ -1,0 +1,497 @@
+Linux Kernelの割り込み番号の"変化"について
+
+--------------------------------------------------------------------------------
+以前のhwirq、virq、irq_domain
+------------------------------------------------------------------------------
+以前は、ハードウェア割り込み毎に、事前にマクロなどで、virq番号(linux kernelで使うirq)を確定/定義していた:
+ヘッダにて: arch/arm/mach-xxxxx/include/mach/irqs.h
+
+また、hwirq<->virq変換式も、簡単だった。
+
+そして、driverにて
+    request_irq(virq, xxx_handler)を呼んだ
+            ---> kernelはvirq番号からhwirqへ変換し、そのhwirqを設定/Enableした。
+    
+それで、
+割り込みが発生したら、
+        hwirからvirqを計算して、irq_desc[vriq].handle_irqを呼ぶ -> 登録したxxx_handlerが呼ばれる。
+
+この時は、hwirqとvirqは、厳密な変換関係だった。
+
+--------------------------------------------------------------------------------
+現在のhwirq、virq、irq_domain
+--------------------------------------------------------------------------------
+現在もKernelでは、irq_desc[x]のindexは、virq番号であるが、
+以前のように、virq <-> hwirq 変換方法は、固定ではなくなった。
+
+SoCのINTCが複雑になるから。
+
+複数のINTCがあるSoCでは、
+INTC a内にも、hwirq番号が、0,1,2,3...となっていて、
+INTC b内にも、hwirq番号が、0,1,2,3...となっている。
+
+なので、この場合のhwirqを言う時には、必ず”どのINTCのhwirq”であるかを、明言する必要が。
+それで、一つのINTC = 一つのIRQ Domain にした。
+
+変換方法も、irq_domain毎に違うかも。
+でも、virqとhwirqの関係は、一対一で、互いに変換できる。
+
+Driverを書く立場から見て、唯一になるvirq番号だけ知ればOKなはずだ。hwirqがどうvirqになるかは、気にしない。
+
+------------------------
+struct irq_domain {             //include/linux/irqdomain.h
+   	struct list_head ink;
+    const char *name;
+    const struct irq_domain_ops *ops;
+    ...
+    unsigned int linear_revmap[];
+}
+------------------------
+
+
+--------------------------------------------------------------------------------
+irq_domain.linear_rtvmap[hwirq]　とallocated_irqs 変数(kernel/irq/irqdesc.c)
+--------------------------------------------------------------------------------
+現在のvirqの保存先は、
+そのINTCが該当するirq_domainのlinear_rtvmap[]である。
+つまり、virq == irq_domain.linear_rtvmap[hwirq]である。
+
+なので、domainのlinear_rtvmap[]は、殆どの時間帯には、空で、
+そのIRQを使う時に、irq_domain.linear_rtvmap[hwriq] = virqと、内容が初めて設定される。
+
+それで、
+親INTCに、割り込みが発生したら、
+    b  vector
+         --->カーネルのとあるC関数を呼ぶ  
+              --->INTCのRegisterを読んで、hwriqを確定する
+                    --->hwirqをindexとして、そのINTCのdomain.linear_rvtmap[hwriq]から、virqを確定する
+                        --->virqをindexとして、irq_desc[x].handle_irq()を呼ぶ:
+                                ---> 私たちがirq_desc[x].action (list)に書く本当のhandlerを呼ぶ(我らがやるべきことは、これだけ)
+                                ---> irq_desc[x].irq_data.irq_chip 内の関数らでIRQをクリアする(Registerを操作するSoC密接処理を、ここに集中)
+
+--------------------
+もっと詳細なVer:
+--------------------
+IRQ発生
+    vector_irq
+	    __irq_usr/__irq_svc                        //usrモードも、svcモード際にもIRQ発生可、現場保存など
+             usr_entry/svc_entry
+ 	            irq_handler                        //IRQ処理マクロ
+        	       handle_arch_irq                 //関数ポインター実行
+                   s3c24xx_handle_irq()            //関数ポインターが指す-初のC関数(SoC毎違う)
+                       初のC関数にて、Interrupt Controllerのレジスタを読んで、hwirq番号を確定する
+                            hwirq から irq_desc[NR_IRQS] を確定(index: virtual irq number)
+                               irq_desc[x].handle_irq()を呼ぶ:
+                                   1)私たちがirq_desc[x].action (list)に書く本当のhandlerを呼ぶ(我らがやるべきことは、これだけ)
+                                   2)irq_desc[x]irq_data.irq_chip 内の関数らでIRQをクリアする(Registerを操作するSoC密接処理を、ここに集中)
+
+
+
+
+
+
+----------------------------------------
+子INTC
+----------------------------------------
+S3C2440の親INT/子INT関係:
+
+    ------------------------------------
+    |   親INT        |      子INT      | 
+    ------------------------------------
+    |hwirq:   name:  | hwirq:   name:  | 
+    |                |   4      EINT4  | 
+    |  4      INT4_7 <   5      EINT5  | 
+    |                |   6      EINT6  | 
+    |                |   7      EINT7  | 
+    ------------------------------------
+    
+    つまり、子割り込みEINT4~7が発生したら、CPUには、親割り込み番号4が到達する。
+
+------------------------
+子INTC EINT5を例にする:
+------------------------
+    子INT(EINT5) => 親INTCへのHW IRQ番号: 4 
+
+    step1. 親domain設定するのと、親irqのためのirq_desc[virq]を設定する
+    
+            1.子INTCが親INTCへのHW INT番号 4 を引数として、親INTCのdomainに、hwirqとvirqの関係を設定する。
+
+                親INTCのirq_domain.linear_revmap[4] = virq(allocated_irqsにて、空いてるbit) と。
+
+                例えば、bit 8 が空いてるとしたら、親INTCのirq_domain.linear_revmap[4] = 8 と、
+                                                                                   ^    ^
+                                                                                   ^    virq
+                                                                                   親intcのhwirq
+
+            2.virqが分かったら、irq_desc[virq].handle_irq = s3c_irq_demux と設定する
+                                irq_desc[   8].handle_irq = s3c_irq_demux と。
+    
+    step2. 子domain設定するのと、子irqのためのirq_desc[virq]を設定する
+
+            1.子INTC内のHW INT番号 5 を引数として、子INTCのdomainに、hwirqとvirqの関係を設定する。
+
+                子INTCのirq_domain.linear_revmap[5] = virq(allocated_irqsにて、空いてるbit) と。
+
+                例えば、bit 9 が空いてるとしたら、子INTCのirq_domain.linear_revmap[5] = 9 と、
+                                                                                   ^    ^
+                                                                                   ^    virq
+                                                                                   子intcのhwirq
+
+            2.virqが分かったら、irq_desc[virq].handle_irq = s3c_irq_demux と設定する
+                                irq_desc[   9].handle_irq = s3c_irq_demux と。
+    
+            * 親INT用のirq_desc[]を設定したから、子INT用のirq_desc[]を設定しなくても良い、わけではない。
+
+    step3. driverでは、step2で分かったvirqを使って、
+            request_irq(9, my_irq_handler)
+            request_thread_irq(9, my_irq_handler)などして、IRQ handlerを登録/IRQをEnableする。
+
+            そうすると、my_irq_handlerが、irq_desc[9].action listに保存される。
+
+    step4. 割り込みが発生したら
+            1.カーネルは、親INTCのRegisterを読んで、hwirq = 4 であることが分かる。
+            2.hwirq = 4 が分かったら、親INTCのirq_domain.linear_revmap[4] から、virqが分かる。
+            3.virqをindexとして、irq_desc[virq].handle_irq()を呼ぶ(s3c_irq_demux)。
+
+            4.s3c_irq_demux()は、子INTCのRegisterを読んで、子INTCのhwirq = 5 が分かる。
+            5.hwirq = 5 が分かったら、子INTCのirq_domain.linear_revmap[5] から、virqが分かる。
+            6.virqをindexとして、irq_desc[virq].handle_irq()を呼ぶ。
+                   ---> 私たちがirq_desc[virq].action (list)に書く本当のhandlerを呼ぶ(my_irq_handler)
+                   ---> irq_desc[virq].irq_data.irq_chip 内の関数らでIRQをクリアする(Registerを操作するSoC密接処理を、ここに集中)
+
+    
+
+--------------------------------------------------------------------------------
+irq_domainで、以前の hwirq <-> virq 固定関係をサポートするのか？
+--------------------------------------------------------------------------------
+同じく、irq_domain.linear_rtvmap[hwriq] = virq で、サポートする。
+
+a.古い固定関係の際には、irq_domain.linear_rtvmap[hwirq] に、値が既に入ってる。
+
+    ヘッダ: arch/arm/mach-xxxxx/include/mach/irqs.h にて、virqがもう分かるから、
+    直request_irq(virq, handler)呼べば良かった。
+
+
+b.現在の非固定の際には、irq_domain.linear_rtvmap[hwirq] に、IRQを使う時に、初めて値が入るから、
+    直request_irq()呼べない。
+
+    1)まず、dtsにて、どのINTCの、何番HW irqを使うのか説明しておく。
+        カーネルが起動時に、どのvirqと該当関係を持つのか、解析する。
+    2)request_irq(virq, handler)を呼ぶ。
+
+
+--------------------------------------------------------------------------------
+とあるINTCのx番hwirqを、とあるdomain内のhwirqに、どうやって変換するのか？
+--------------------------------------------------------------------------------
+1. irq_domain内のops->xlate()メンバー関数:
+
+    この関数がdtsを解析して---> hwirq番号と、IRQ trigger type が分かる。
+    
+    hwirqをvirqへMAPした後から、request_irq()が呼べる。
+
+
+2. irq_domain内のops->map()メンバー関数:
+    hwirqとvirqを、関連づける。
+    もし、子INTであれば、親INTを設定する。
+    virqからhwirqが該当するハードウェアを探せるようにするため。
+
+        ----------------------------------------
+        struct irq_domain {         //include/linux/irqdomain.h
+           	struct list_head ink;
+            const char *name;
+            const struct irq_domain_ops *ops;       //
+            ...
+            unsigned int linear_revmap[];
+        }
+        
+        struct irq_domain_ops {
+        	int (*match)(struct irq_domain *d, struct device_node *node, enum irq_domain_bus_token bus_token);
+        	int (*select)(struct irq_domain *d, struct irq_fwspec *fwspec, enum irq_domain_bus_token bus_token);
+        
+        
+            //
+        	int (*map)(struct irq_domain *d, unsigned int virq, irq_hw_number_t hw);
+        	void (*unmap)(struct irq_domain *d, unsigned int virq);
+        
+        
+            //
+        	int (*xlate)(struct irq_domain *d, struct device_node *node,
+        		     const u32 *intspec, unsigned int intsize,
+        		     unsigned long *out_hwirq, unsigned int *out_type);
+        
+        #ifdef	CONFIG_IRQ_DOMAIN_HIERARCHY
+        	/* extended V2 interfaces to support hierarchy irq_domains */
+        	int (*alloc)(struct irq_domain *d, unsigned int virq, unsigned int nr_irqs, void *arg);
+        	void (*free)(struct irq_domain *d, unsigned int virq, unsigned int nr_irqs);
+        
+        	int (*activate)(struct irq_domain *d, struct irq_data *irqd, bool reserve);
+        	void (*deactivate)(struct irq_domain *d, struct irq_data *irq_data);
+        
+        	int (*translate)(struct irq_domain *d, struct irq_fwspec *fwspec, unsigned long *out_hwirq, unsigned int *out_type);
+        #endif
+        
+        #ifdef CONFIG_GENERIC_IRQ_DEBUGFS
+        	void (*debug_show)(struct seq_file *m, struct irq_domain *d,
+        			   struct irq_data *irqd, int ind);
+        #endif
+        };
+
+
+
+--------------------------------------------------------------------------------
+dts例
+--------------------------------------------------------------------------------
+現在は、事前にhwriq番号を知る方法はなくなり、
+    1) dts nodeにて、deviceのinterruptを、どのintcに紐づけるのか、説明する
+    2) 続いて、そのintc内の何番のhwirqを使うのか、説明する
+
+device node内から、親intcを指定できるだけではなく、interrupt-controller node内からも、親intcを指定できる。
+intc同士にも、上下関係を説明できるってことだ。
+
+親intcが誰か、書いてないnodeは、そのnodeの親nodeを見る。
+親nodeに、必ずinterrupt-parent = <0x1>などと、書いてるはず。
+ここの0x1が、phandleという物で、このphandleが所属してるnodeが、SoCの親intcだ!
+
+直の親nodeに、interrupt-parent = <0x1>などと、書いてなければ、さらに上の親nodeを見れば良い。
+
+
+----------------------------------------
+例:
+----------------------------------------
+
+/ {
+    compatible = "samsung,s3c2440";
+    interrupt-parent = <0x1>;                   //interrupt-parent = <phandle>をroot nodeで指定した!
+    #address-cells = <0x1>;                     //なので、phandle = <0x1>と書いたnodeが、親intcだ。
+    #size-cells = <0x1>;
+    model = <MINI2440>;
+
+    ...
+    srom-cs4@20000000 {
+        compatible = "simple-bus";
+        #address-cells = <0x1>;
+        #size-cells = <0x1>;
+        reg = <0x20000000 0x8000000>;
+        ranges;
+
+        ethernet@20000000 {
+            compatible = "davicom,dm9000";
+            reg = <20000000 0x2 0x20000004 0x2>;
+            interrupt-parent = <&gpf>;              //
+            interrupt = <7 IRQ_TYPE_EDGE_RISING>;   //u32いくつ書くかは、parent nodeで、説明してる。
+            local-mac-address = [00 00 de ad be ef];
+            davicom,no-eeprom;
+        };
+    };
+
+    interrupt-controler@4a000000 {
+        compatible = "samsung,s3c2410-irq";
+        reg = <0x4a000000 0x100>;
+        interrupt-controller;                   //interrupt controllerであれば、必ずこれを書くこと
+        #interrypt-cells = <0x4>                //interrupt controllerであれば、必ずこれを書くこと
+                                                //配下のirqを説明するのに、
+        phandle = <0x1>;                        //親intc
+    };
+
+    pinctrl@56000000 {                          //
+        reg = <0x56000000 0x1000>;
+        compatible = "samsung,s3c2440-pinctrl";
+
+        wakeup-interrupt-controller {
+            compatible = "samsung,s3c2410-wakeup-eint";
+            interrupts = <0x0 0x0 0x0 0x3 ....>;
+        };
+
+        gpa {                                       //親intcが誰かを、書いてない->親nodeを見る
+            gpio-controller;
+            #gpio-cells = <0x2>;
+        };
+
+        ...
+
+        gpf {                                       //親intcが誰かを、書いてない->親nodeを見る
+            gpio-controller;
+            #gpio-cells = <0x2>;
+            interrupt-controller;
+            #interrupt-cells = <0x2>;
+            phandle = <0x6>;                        //dtb逆アセンブルすれば、phandleが見える
+        };
+
+        gpg {
+            gpio-controller;
+            #gpio-cells = <0x2>;
+            interrupt-controller;
+            #interrupt-cells = <0x2>;
+        };
+    };
+}
+
+
+--------------------------------------------------------------------------------
+dtsで、MINI2440のbuttonを説明する例
+--------------------------------------------------------------------------------
+hardware接続:
+    main intc <--- EINT0
+    main intc <--- EINT2
+
+    gpg3(sub intc) <--- EINT11
+    gpg11(sub intc) <--- EINT19
+
+
+
+/ {
+    model = "MINI2440";
+    compatible = "samsung,s3c2440", "samsung,smdk2440";
+    ...
+    ...
+    ...
+    buttons {
+        compatible = "mini2440_button";
+		eint-pins  = <&gpf 0 0>, <&gpf 2 0>, <&gpg 3 0>, <&gpg 11 0>;
+        interrupts-extended = <&intc 0 0 0 3>,                          //4桁: ctrl_num   parent_irq  ctrl_irq   type  意味は下
+                              <&intc 0 0 2 3>,                          //
+                              <&gpg 3 3>,                               //gpgの3番目のPIN(pinctrl経由して、このPINの値が読めるってこと)
+                              <&gpg 11 3>;                              //gpgの11番目のPIN(pinctrl経由して、このPINの値が読めるってこと)
+    };
+
+};
+
+意味:
+interrupts-extended = <&intc 0 0 0 3>,  //dts規範参考: interrupts-extendedで、複数のhwirqを指定できる。INTC毎に使うu32個数は、そのINTC nodeを見れば分かる。
+                         ^   ^ ^ ^ ^
+                         |   | | | |
+                         |   | | | +--irq type:   See Documentation/devicetree/bindings/pinctrl/samsung-pinctrl.txtt
+                         |   | | +----ctrl_irq:   $intc内でのどのhwirqなのか。EINT0/2は、あいにくmain intcでの0と2番hwirqだった。
+                         |   | +------parent_irq: 子INTCが親INTCへのhwirq番号。ここでは、子INTCへではなく、直接親INTCへ割り込むので、ないので０。
+                         |   +--------ctrl_num:   0=親INTCへ割り込む, 1=子INTCへ割り込む(子INTCがまた親INTCへ割り込む)
+                         +------------どのINTCへ割り込むのか
+
+                      <&intc 0 0 2 3>,  //
+                      <&gpg 3 3>,       //上と違うINTCへのhwirq
+                      <&gpg 11 3>;      //上と違うINTCへのhwirq
+
+
+--------------------------------------------------------------------------------
+kernel documentation:
+    /linux/v5.9.1/source/Documentation/devicetree/bindings/interrupt-controller/samsung,s3c24xx-irq.txt
+    /linux/v5.9.1/source/Documentation/devicetree/bindings/pinctrl/samsung-pinctrl.txt
+--------------------------------------------------------------------------------
+
+samsung,s3c24xx-irq.txt:
+----------------------------------------
+Samsung S3C24XX Interrupt Controllers
+
+The S3C24XX SoCs contain a custom set of interrupt controllers providing a
+varying number of interrupt sources. The set consists of a main- and sub-
+controller and on newer SoCs even a second main controller.
+
+Required properties:
+- compatible: Compatible property value should be "samsung,s3c2410-irq"
+  for machines before s3c2416 and "samsung,s3c2416-irq" for s3c2416 and later.
+
+- reg: Physical base address of the controller and length of memory mapped
+  region.
+
+- interrupt-controller : Identifies the node as an interrupt controller
+
+- #interrupt-cells : Specifies the number of cells needed to encode an
+  interrupt source. The value shall be 4 and interrupt descriptor shall
+  have the following format:
+      <ctrl_num parent_irq ctrl_irq type>                               //
+
+  ctrl_num contains the controller to use:                              //親INTCへ割り込むのか、子INTCへ割り込むのか
+      - 0 ... main controller
+      - 1 ... sub controller
+      - 2 ... second main controller on s3c2416 and s3c2450
+  parent_irq contains the parent bit in the main controller and will be 
+             ignored in main controllers                                //子INTCが親INTCへのhwirq番号。直接親INTCへhwirqを送る場合は０。
+  ctrl_irq contains the interrupt bit of the controller
+  type contains the trigger type to use
+
+Example:
+
+	interrupt-controller@4a000000 {
+		compatible = "samsung,s3c2410-irq";
+		reg = <0x4a000000 0x100>;
+		interrupt-controller;
+		#interrupt-cells=<4>;
+	};
+
+	[...]
+
+	serial@50000000 {
+		compatible = "samsung,s3c2410-uart";
+		reg = <0x50000000 0x4000>;
+		interrupt-parent = <&subintc>;
+		interrupts = <1 28 0 4>, <1 28 1 4>;
+	};
+
+	rtc@57000000 {
+		compatible = "samsung,s3c2410-rtc";
+		reg = <0x57000000 0x100>;
+		interrupt-parent = <&intc>;
+		interrupts = <0 30 0 3>, <0 8 0 3>;
+	};
+
+
+
+samsung-pinctrl.txt:
+----------------------------------------
+     ...
+     - First Cell: represents the external gpio interrupt number local to the
+       external gpio interrupt space of the controller.
+     - Second Cell: flags to identify the type of the interrupt
+       - 1 = rising edge triggered
+       - 2 = falling edge triggered
+       - 3 = rising and falling edge triggered
+       - 4 = high level triggered
+       - 8 = low level triggered
+     ...
+
+
+
+
+--------------------------------------------------------------------------------
+kernelがs3c2440 dtsのinterruptを処理する流れ
+--------------------------------------------------------------------------------
+intc:
+    root irq controller
+    gpf  irq controller
+    gpg  irq controller
+
+
+irq_domain が肝である:
+    1.interrupt controller毎に、irq_domainがある。
+
+    2.周辺deviceのinterruptを解析するには、
+        2.1 irq_domain->ops->xlate を呼ぶ必要がある(dtsの中からhwirq,typeを取得する)
+
+        2.2 使って無いvirq番号を探して、hwirqとvirqの変換関係を保存する: irq_domain->linear_revmap[hwirq] = virq; 
+
+        2.3 hwirqとvirqを関連づける:
+            irq_domain->ops->map() を呼ぶ: hwirqのプロパティーにより、virqのirq処理関数を設定する(dispater? or irq handler?)
+                    irq_desc[virq].handle_irq = irq handler?;
+
+            もし、このhwirqに、更に上のレベルのirq(hwirq'と仮定)があるとすれば、dispater関数の設定が必要だ: 
+                    irq_desc[virq'].handle_irq = dispater関数; 
+                
+
+--------------------------------------------------------------------------------
+s3c2440の起動流れで、irqの初期化流れ
+--------------------------------------------------------------------------------
+a.起動時のirq初期化
+----------------------------------------
+start_kernel // init/main.c
+    init_IRQ();
+        if (IS_ENABLED(CONFIG_OF) && !machine_desc->init_irq)
+            irqchip_init();         //普通はここ
+        else
+            machine_desc->init_irq();
+
+
+b. dts内のintc初期化流れ:
+----------------------------------------
+irqchip_init                            // drivers/irqchip/irqchip.c
+    of_irq_init(__irqchip_of_table);    // dtsのあらゆるのintc nodeに対して、処理関数を呼ぶ
+
+        すべての"interrupt-controller"と書いたnodeに対して、
