@@ -13,7 +13,6 @@
  *               cdev_del(struct cdev *p)
  * 
  * 
- * waitqueue wait: 							waitqueue wakeup:
  * 	wait_event(queue, condition)					<->	wake_up(wait_queue_head_t *queue)
  * 	wait_event_timeout(queue, condition, timeout)			<->	wake_up(wait_queue_head_t *queue)
  *
