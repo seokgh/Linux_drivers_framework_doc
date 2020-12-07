@@ -57,8 +57,6 @@ static int wait_func(void *data)
 	for(;;) {
 		pr_info("waiting for event...\n");
 
-		//if condition == false(flag==0) ---> sleep
-		//if condition == true (flag!=0) ---> return
 		wait_event_interruptible(my_waitq, wait_queue_flag != 0);	//can be interrupted by signal
 
 		if(wait_queue_flag == 2) {
