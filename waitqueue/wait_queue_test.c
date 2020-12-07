@@ -1,6 +1,5 @@
 /*
- *
- * sample module of character device driver
+ * 
  * 
  * before 2.4:
  *            1. register_chrdev	 (unsigned int major, const char *name,const struct file_operations *fops)
@@ -8,6 +7,7 @@
  *            1. register_chrdev_region	 (dev_t from, unsigned count, const char *name)
  *            2. alloc_chrdev_region	 (dev_t *dev, unsigned baseminor, unsigned count,const char *name)
  *               unregister_chrdev_region(dev_t from, unsigned count)
+ *
  *            3. cdev_init(struct cdev *cdev, const struct file_operations *fops)
  *               cdev_add(struct cdev *p, dev_t dev, unsigned count)
  *               cdev_del(struct cdev *p)
@@ -19,7 +19,12 @@
  *
  * 	wait_event_interruptible(queue, condition)			<->	wake_up_interruptible(wait_queue_head_t *queue)
  * 	wait_event_interruptible_timeout(queue, condition, timeout)	<->	wake_up_interruptible(wait_queue_head_t *queue)
- * 
+ *
+ *      wait_event_cmd
+ *      wait_event_killable
+ *
+ *      wake_up_all
+ *      ...
  */
 
 #include <linux/module.h>
