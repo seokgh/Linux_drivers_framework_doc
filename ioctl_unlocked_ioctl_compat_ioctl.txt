@@ -1,0 +1,81 @@
+Ex:
+
+static struct file_operations led_fops = {
+    .owner  = THIS_MODULE,
+    .open   = led_open,
+    .read   = led_read,
+    .write  = led_write,
+    .llseek = led_llseek,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36)
+    .ioctl  = led_ioctl,
+#else
+    .unlocked_ioctl = led_unlocked_ioctl,
+#endif
+    .release = led_close,
+};
+
+
+-------------------------------------------------------------------------------
+ioctl:
+-------------------------------------------------------------------------------
+    int (*ioctl)(struct inode *, struct file *, unsigned int, unsigned long);
+    
+        //2.6.36から、struct file_operationsの中から、この関数ポインターを削除した？
+        //3.0からは、この関数ポインターすら、残して無い？
+  
+  ioctlは、BKL（Big Kernel Lock）で保護されて、動作できていた。
+  
+  BKLとは、すべてのCPUに対する、全体のLockを意味する。
+  
+  BKLは本質的にはSpinLockですが、SpinLockとは異なる:
+    1.SpinLockは、DeadLockが発生するため、再帰的にロックを取得できないが、BKLは、ロックを再帰的に取得できる！
+    2.BKLはカーネル全体を保護するために使用される反面、SpinLockは非常に特定な共有リソースを保護するために使用される。
+
+  Linuxでは、UserSpaceから、KernelSpaceにアクセスする際にBKLを取り、UserSpaceに戻る際に、BKLをリリースしたという。
+  つまり、一つの瞬間に、1つのUser Processだけが、KernelSpaceで動作するようにする、ということだ。
+   
+  しかし、BKLをとあるCPUで持っている時は、他のUser Processは、Kernel Space動作を、待ち続ける必要があるため、SMP環境では、かなり非効率的だった。
+  元々、LinuxはSMP環境を考慮せずに、作成されたという。なので、SMPが最初に導入された時、それに対するLocking方法が必要だったし、最もSimpleな方法が、BKLだった。
+
+  BKL Api:
+    void lock_kernel(void);
+    void unlock_kernel(void);
+
+  BKLは、2.6.39から削除された。
+
+
+
+
+-------------------------------------------------------------------------------
+unlocked_ioctl:
+-------------------------------------------------------------------------------
+    long (*unlocked_ioctl) (struct file *filp, unsigned int cmd, unsigned long arg);
+
+    BKLを使用せずに、自分自身のLockを使用するunlocked_ioctlフィールドが、file_operations構造体に追加された。
+    これにより、SMP環境で、複数のUser Processが、同時にKernelSpaceでの動作が可能となった。
+    
+    関数プロトタイプを見ると、inodeパラメータが消えて、fileパラメータだけが残っているが、これは
+      inodeは、すべてのプロセスで、共有可能だが、
+      fileは、現在のプロセスコンテキストでのみ使用する物なので、
+    確実な同期のために、fileのみに、アクセスするよう、明示的に表現したものと考えられる。
+    
+
+-------------------------------------------------------------------------------
+compat_ioctl:
+-------------------------------------------------------------------------------
+    long (*compat_ioctl) (struct file *filp, unsigned int cmd,unsigned long arg);
+
+
+    64bit systemにて、32bitのUser Processが、ioctl要求する場合のために、作られた関数である。
+    つまり、32bitプロセスのioctl要求を、64bitカーネルで処理するために（その逆の場合も）、変換を担当するのが、この関数である。
+
+    32/64 bit問題に確実に対応するためには、void*/longなど、影響を受けるタイプの変数を、使わなければ良い。
+
+
+-------------------------------------------------------------------------------
+//fileから、inodeを取得する方法:
+-------------------------------------------------------------------------------
+static inline struct inode *file_inode(const struct file *f)        //　include/linux/fs.h
+{
+    return f->f_inode;
+}
