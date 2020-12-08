@@ -137,8 +137,8 @@ Pin groups:
 
 
 Pin configuration:
-    Pin configurationの対象は、pin or pin groupである。
     pinctrl subsystemは、pin configurationを使って、PULL-UP/DOWN, Tri-State, Drive-Strenghtなどを設定してる。
+    Pin configurationの対象は、pin or pin groupである。
     struct pinconf_ops に、これらの機能を定義してる:
 
         struct pinconf_ops { 
