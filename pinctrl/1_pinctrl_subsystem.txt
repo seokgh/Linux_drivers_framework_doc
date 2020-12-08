@@ -77,7 +77,16 @@ pinctrl subsystem
                                                                             +---------->       SoC pinctrl driver      |
                                                                                        |         (low level)           |
                                                                                        +----------------+--------------+
-    
+
+
+ざっくりFILE間の関係:　いつもの通りだ。
+pinctrl_gpio_set_config()   //drivers/pinctrl/core.c, EXPORT_SYMBOL_GPL(pinctrl_gpio_set_config);したSymbolで、drivers/gpio/gpiolib.cでもCallしてる。
+    ---> pinconf_set_config()   //drivers/pinctrl/pinconf.c  
+        ---> return ops->pin_config_set(pctldev, pin, configs, nconfigs);
+                      |
+                      V
+            ---> return bcm2835_pinconf_set()  //drivers/pinctrl/bcm/pinctrl-bcm2835.c
+
 ----------------------------------------
 struct pinctrl_desc
 ----------------------------------------
