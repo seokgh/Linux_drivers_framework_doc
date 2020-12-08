@@ -88,13 +88,13 @@ struct pinctrl_desc:
         struct pinctrl_desc {
                 const char *name;
 
-                const struct pinctrl_pin_desc *pins;    //all pins
+                const struct pinctrl_pin_desc *pins;    //all pins(1)
 
                 unsigned int npins;
 
-                const struct pinctrl_ops *pctlops;      //groups系
-                const struct pinmux_ops *pmxops;        //multiplex(function)系
-                const struct pinconf_ops *confops;      //configuration系
+                const struct pinctrl_ops *pctlops;      //groups系(2)
+                const struct pinmux_ops *pmxops;        //multiplex(function)系(4)
+                const struct pinconf_ops *confops;      //configuration系(3)
 
                 struct module *owner;
                 #ifdef CONFIG_GENERIC_PINCONF
@@ -105,6 +105,7 @@ struct pinctrl_desc:
         };
 
 
+(1)
 struct pinctrl_pin_desc:
     pinctrl subsystemは、SOCの全てのpinを、struct pinctrl_pin_desc型の配列で、管理する。
 
@@ -118,6 +119,7 @@ pin controller自身は、device tree内の一つのnodeである必要がある
 soc周辺のchipは、自分のnodeにて、使うpin ctrl情報を乗せる(phandle---dtcがつける番号)必要がある。
     
 
+(2)
 Pin groups:
        複数のPINを使うSPI、IICなどのpinを、pin groupと呼ぶ。groupらを管理するため、pin groupSもある。
 
@@ -135,7 +137,7 @@ Pin groups:
             void (*dt_free_map) (struct pinctrl_dev *pctldev, struct pinctrl_map *map, unsigned num_maps); 
         };
 
-
+(3)
 Pin configuration:
     pinctrl subsystemは、pin configurationを使って、PULL-UP/DOWN, Tri-State, Drive-Strenghtなどを設定してる。
     Pin configurationの対象は、pin or pin groupである。
@@ -163,7 +165,7 @@ Pin configuration:
             void (*pin_config_config_dbg_show) (struct pinctrl_dev *pctldev, struct seq_file *s, unsigned long config); 
         };
 
-
+(4)
 Pin multiplexing:
     Pin multiplexingの対象も、pin or pin groupである。
     pinctrl subsystemは、struct pinmux_opsを使って、pinmux操作を定義してる:
@@ -195,7 +197,7 @@ Pin multiplexing:
             bool strict; 
         };
 
-
+--------------------------------------------------------------------------------
 Pin state:
         pinctrl subsystemにて、使う用語。
  
@@ -208,6 +210,7 @@ Pin state:
         確かに、とあるpin(或いはpin group)と、pin functionと、pin configuration情報があれば、
         pin状態を確定したと、言える。
 
+--------------------------------------------------------------------------------
 Pin map:
     include/linux/pinctrl/machine.h
 
