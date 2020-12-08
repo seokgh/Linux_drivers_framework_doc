@@ -31,8 +31,8 @@ Step 1
                     I2C1_SDAにするのか？
                     など
         2)pin configuration: 電気特性設定
-                    Pull-up resistor    にする？
-                    Pull-down resistor  にする？
+                    Pull-up registor    にする？
+                    Pull-down registor  にする？
                     Tri-state設定(高阻態)
                     Drive Strength(IOの駆動能力、信号の強さ。例えば、8mA, 12mAなど)
                     Speedなど
