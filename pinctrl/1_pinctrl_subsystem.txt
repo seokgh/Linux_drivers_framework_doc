@@ -123,7 +123,7 @@ Pin groups:
 
         struct pinctrl_ops {
             int (*get_groups_count) (struct pinctrl_dev *pctldev); 
-        
+       
             const char *(*get_group_name) (struct pinctrl_dev *pctldev, unsigned selector); 
         
             int (*get_group_pins) (struct pinctrl_dev *pctldev, unsigned selector, const unsigned **pins, unsigned *num_pins); 
@@ -139,6 +139,7 @@ Pin groups:
 Pin configuration:
     pinctrl subsystemは、pin configurationを使って、PULL-UP/DOWN, Tri-State, Drive-Strenghtなどを設定してる。
     Pin configurationの対象は、pin or pin groupである。
+    
     struct pinconf_ops に、これらの機能を定義してる:
 
         struct pinconf_ops { 
