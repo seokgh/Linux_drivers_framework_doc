@@ -49,6 +49,35 @@ struct irq_domain {             //include/linux/irqdomain.h
 ------------------------
 
 
+
+
+
+----------------------------------------- kernel v5.4.y code -----------------------------------------
+//irqdesc.h
+static inline void *irq_desc_get_handler_data(struct irq_desc *desc)
+{
+	return desc->irq_common_data.handler_data;
+}
+
+//pinctrl-s3c24xx.c
+...
+struct s3c24xx_eint_data *eint_data = irq_desc_get_handler_data(desc);
+...
+virq = irq_linear_revmap(eint_data->domains[data->hwirq], data->hwirq);
+...
+
+なので、結局:
+                           +-----------------------------　仮コード -----------------------------+
+                          /                                                                      \
+virq = irq_linear_revmap( struct irq_desc *desc->irq_common_data.handler_data->domains[data->hwirq], data->hwirq);
+になる。
+----------------------------------------- kernel v5.4.y code -----------------------------------------
+
+
+
+
+
+
 --------------------------------------------------------------------------------
 irq_domain.linear_rtvmap[hwirq]　とallocated_irqs 変数(kernel/irq/irqdesc.c)
 --------------------------------------------------------------------------------
