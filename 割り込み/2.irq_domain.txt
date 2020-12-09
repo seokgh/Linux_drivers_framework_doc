@@ -64,13 +64,33 @@ static inline void *irq_desc_get_handler_data(struct irq_desc *desc)
 struct s3c24xx_eint_data *eint_data = irq_desc_get_handler_data(desc);
 ...
 virq = irq_linear_revmap(eint_data->domains[data->hwirq], data->hwirq);
-...
+BUG_ON(!virq);
+generic_handle_irq(virq);
+
+
+int generic_handle_irq(unsigned int irq)
+{
+	struct irq_desc *desc = irq_to_desc(irq);
+
+	if (!desc)
+		return -EINVAL;
+	generic_handle_irq_desc(desc);----------+
+	return 0;                               |
+}                                               |
+EXPORT_SYMBOL_GPL(generic_handle_irq);          |
+                                                v
+static inline void generic_handle_irq_desc(struct irq_desc *desc)
+{
+	desc->handle_irq(desc);
+}
+
 
 なので、結局:
                            +-----------------------------　仮コード -----------------------------+
                           /                                                                      \
 virq = irq_linear_revmap( struct irq_desc *desc->irq_common_data.handler_data->domains[data->hwirq], data->hwirq);
-になる。
+irq_desc[virq].handle_irq();
+することになる。
 ----------------------------------------- kernel v5.4.y code -----------------------------------------
 
 
