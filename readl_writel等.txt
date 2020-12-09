@@ -1,4 +1,4 @@
-ioremap()                 //PAGE_SIZE
+ioremap()                 //PAGE_SIZE maping
 iounmap()
 devm_ioremap_resource()   //
 
