@@ -207,6 +207,7 @@ Pin multiplexing:
 
 --------------------------------------------------------------------------------
 Pin state:
+--------------------------------------------------------------------------------
         pinctrl subsystemにて、使う用語。
  
         pin(pin group)------\
@@ -220,16 +221,20 @@ Pin state:
 
 --------------------------------------------------------------------------------
 Pin map:
+--------------------------------------------------------------------------------
+    上記Pin stateの親の感じ？
+    
     include/linux/pinctrl/machine.h
 
     struct pinctrl_map { 
-        const char *dev_name;           //device name
-        const char *name;               //pin state name
-        enum pinctrl_map_type type;     //type:
-                                        //PIN_MAP_TYPE_MUX_GROUP     //
-                                        //PIN_MAP_TYPE_CONFIGS_PIN   //
-                                        //PIN_MAP_TYPE_CONFIGS_GROUP // 
-                                        //PIN_MAP_TYPE_DUMMY_STATE   //
+        const char *dev_name;           //device name !!!
+        const char *name;               //pin state name !!!
+        enum pinctrl_map_type type;     //type: このMapデータのTypeのこと!!!
+                                            //全部で、4つのTypeがあり得る:
+                                        　　　　//PIN_MAP_TYPE_MUX_GROUP     //
+                                        　　　　//PIN_MAP_TYPE_CONFIGS_PIN   //
+                                        　　　　//PIN_MAP_TYPE_CONFIGS_GROUP // 
+                                        　　　　//PIN_MAP_TYPE_DUMMY_STATE   //
 
         const char *ctrl_dev_name;      //pin controller device name
 
