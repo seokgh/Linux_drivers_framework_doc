@@ -222,9 +222,10 @@ Pin state:
 --------------------------------------------------------------------------------
 Pin map:
 --------------------------------------------------------------------------------
-    上記Pin stateの親の感じ？
+    上記Pin stateの親データ
+    dtsから、pin mapを生成する
     
-    include/linux/pinctrl/machine.h
+    include/linux/pinctrl/machine.h:
 
     struct pinctrl_map { 
         const char *dev_name;           //device name !!!
