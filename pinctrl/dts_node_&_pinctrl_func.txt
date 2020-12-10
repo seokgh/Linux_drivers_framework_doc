@@ -1,0 +1,77 @@
+		gpio@7e200000 {
+			compatible = "brcm,bcm2711-gpio";		//drivers/pinctrl/bcm/pinctrl-bcm2835.c
+			reg = <0x7e200000 0xb4>;			//The GPIO register base address is 0x7e200000.
+			interrupts = <0x00 0x71 0x04 0x00 0x72 0x04>;	//親INTC(40041000)の #interrupt-cells=3 だったので
+									//GIC_SPI, 0x71, IRQ_TYPE_LEVEL_HIGH;  GIC_SPI, 0x72, IRQ_TYPE_LEVEL_HIGH; 
+			gpio-controller;				//GPIO Controller
+			#gpio-cells = <0x02>;
+			interrupt-controller;				//is INTC
+			#interrupt-cells = <0x02>;			//このGPIO式INTCへ割り込むDeviceのIRQ説明は、2 Cellで説明する
+			pinctrl-names = "default";			//from arch/arm/boot/dts/bcm2835-rpi.dtsi
+			gpio-line-names = "ID_SDA\0ID_SCL\0SDA1\0SCL1\0GPIO_GCLK\0GPIO5\0GPIO6\0SPI_CE1_N\0SPI_CE0_N\0SPI_MISO\0SPI_MOSI\0SPI_SCLK\0GPIO12\0GPIO13\0TXD1\0RXD1\0GPIO16\0GPIO17\0GPIO18\0GPIO19\0GPIO20\0GPIO21\0GPIO22\0GPIO23\0GPIO24\0GPIO25\0GPIO26\0GPIO27\0RGMII_MDIO\0RGMIO_MDC\0CTS0\0RTS0\0TXD0\0RXD0\0SD1_CLK\0SD1_CMD\0SD1_DATA0\0SD1_DATA1\0SD1_DATA2\0SD1_DATA3\0PWM0_MISO\0PWM1_MOSI\0STATUS_LED_G_CLK\0SPIFLASH_CE_N\0SDA0\0SCL0\0RGMII_RXCLK\0RGMII_RXCTL\0RGMII_RXD0\0RGMII_RXD1\0RGMII_RXD2\0RGMII_RXD3\0RGMII_TXCLK\0RGMII_TXCTL\0RGMII_TXD0\0RGMII_TXD1\0RGMII_TXD2\0RGMII_TXD3";
+			phandle = <0x0f>;
+
+
+			//	drivers/pinctrl/bcm/pinctrl-bcm2835.c の下記関数にて、これらのノードを解析してる
+			//	なので、Pinctrl Subsystem用の説明であるのは、間違いない
+			//
+			//	static int bcm2835_pctl_dt_node_to_map()
+			//	{
+			//		...
+			//	}
+			
+			//	static const struct pinctrl_ops bcm2835_pctl_ops = {
+			//		.get_groups_count = bcm2835_pctl_get_groups_count,
+			//		.get_group_name = bcm2835_pctl_get_group_name,
+			//		.get_group_pins = bcm2835_pctl_get_group_pins,
+			//		.pin_dbg_show = bcm2835_pctl_pin_dbg_show,
+			//		.dt_node_to_map = bcm2835_pctl_dt_node_to_map,		//<---
+			//		.dt_free_map = bcm2835_pctl_dt_free_map,
+			//	};
+
+			//	static struct pinctrl_desc bcm2835_pinctrl_desc = {
+			//		.name = MODULE_NAME,
+			//		.pins = bcm2835_gpio_pins,
+			//		.npins = ARRAY_SIZE(bcm2835_gpio_pins),
+			//		.pctlops = &bcm2835_pctl_ops,				//<---
+			//		.pmxops = &bcm2835_pmx_ops,
+			//		.confops = &bcm2835_pinconf_ops,
+			//		.owner = THIS_MODULE,
+			//	};
+
+			//	pc->pctl_dev = devm_pinctrl_register(dev, &bcm2835_pinctrl_desc, pc);
+
+			//	step0:
+			//		Probe出来たら、callback 登録するだけ。呼ぶのは、別タイミング。
+			//	step1:
+			//		呼ぶタイミング:
+			//		dt_node_to_map関数ポインターの例:
+			//
+			//	kthread()
+			//		worker_thread()
+			//			process_one_work()
+			//				deferred_probe_work_func()
+			//					bus_probe_device()
+			//						device_initial_probe()
+			//							__device_attach()
+			//								bus_for_each_drv()
+			//									__device_attach_driver()
+			//										driver_probe_device()
+			//											really_probe()
+			//												pinctrl_bind_pins()
+			//													devm_pinctrl_get()
+			//														struct pinctrl *pinctrl_get(struct device *dev)	//drivers/pinctrl/core.c
+			//															create_pinctrl()	//drivers/pinctrl/core.c
+			//																pinctrl_dt_to_map()	//drivers/pinctrl/devicetree.c
+			//																	dt_to_map_one_config()	//drivers/pinctrl/devicetree.c
+			//																		if (!ops->dt_node_to_map) {
+			//																		ret = ops->dt_node_to_map(pctldev, np_config, &map, &num_maps);
+
+
+			// dt node to map
+			dpi_gpio0 {					//to pinctrl subsystem??? 28 pins
+				brcm,pins = <0x00 0x01 0x02 0x03 0x04 0x05 0x06 0x07 0x08 0x09 0x0a 0x0b 0x0c 0x0d 0x0e 0x0f 0x10 0x11 0x12 0x13 0x14 0x15 0x16 0x17 0x18 0x19 0x1a 0x1b>;
+				brcm,function = <0x06>;			//drivers/pinctrl/bcm/pinctrl-bcm2835.c:  funcs = of_find_property(np, "brcm,function", NULL);
+				phandle = <0x44>;
+			};
+
