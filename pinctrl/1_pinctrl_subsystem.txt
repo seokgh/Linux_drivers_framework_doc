@@ -222,8 +222,7 @@ Pin state:
 --------------------------------------------------------------------------------
 Pin map:
 --------------------------------------------------------------------------------
-    上記Pin stateの親データ
-    dtsから、pin mapを生成する
+    上記Pin stateの親データ。dtsから、このpin mapを生成する。
     
     include/linux/pinctrl/machine.h:
 
@@ -236,11 +235,8 @@ Pin map:
                                         　　　　//PIN_MAP_TYPE_CONFIGS_PIN   //
                                         　　　　//PIN_MAP_TYPE_CONFIGS_GROUP // 
                                         　　　　//PIN_MAP_TYPE_DUMMY_STATE   //
-
         const char *ctrl_dev_name;      //pin controller device name
-
-        //このmapが使うデータ. 上のtypeにより、dataはunion内の一つになる.
-        union { 
+        union {                         //このmapが使うデータ. 上のtypeメンバーにより、dataは、union内の一つになる.
             struct pinctrl_map_mux mux;
             struct pinctrl_map_configs configs;
         } data; 
