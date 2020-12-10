@@ -212,7 +212,7 @@ Pin state:
  
         pin(pin group)------\
             +                \
-        function--------------- 一つの"pin state"という物を、確定する
+        function--------------- 一つの"pin(pin group) state"という物を、確定するという ===>>> device の state を確定することにもなる　
             +                /
         configuration_______/
 
