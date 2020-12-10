@@ -236,13 +236,33 @@ Pin map:
                                         　　　　//PIN_MAP_TYPE_CONFIGS_GROUP // 
                                         　　　　//PIN_MAP_TYPE_DUMMY_STATE   //
         const char *ctrl_dev_name;      //pin controller device name
-        union {                         //このmapが使うデータ. 上のtypeメンバーにより、dataは、union内の一つになる.
+        
+        //このmapが使うデータ. 上のtypeメンバーにより、dataは、union内の一つになる.
+        //    if type == PIN_MAP_TYPE_CONFIGS_GROUP,                          data = struct pinctrl_map_mux 型のデータ
+        //    if type == PIN_MAP_TYPE_CONFIGS_PIN/PIN_MAP_TYPE_CONFIGS_GROUP, data = struct pinctrl_map_configs 型のデータ
+        union {                         
             struct pinctrl_map_mux mux;
             struct pinctrl_map_configs configs;
         } data; 
     };
 
+        struct pinctrl_map_mux {
+            const char *group;      //このmapが指すpin groupの名称情報
+            const char *function;   //このmapが指すpin groupを、どのfunctionに設定するかの情報
+        }; 
 
+        struct pinctrl_map_configs {
+            const char *group_or_pin;   //pin/pin groupの名称情報
+            unsigned long *configs;     //configuration配列で、このpin/pin groupを、どういうのConfigにするかの情報？
+            unsigned num_configs;       //configuration配列の要素数、Configの数
+        };
+        
+        
+        
+        
+        
+        
+        
 --------------------------------------------------------------------------------
 他Driverは、pinctrl subsystemをどう使うのか？
 --------------------------------------------------------------------------------
