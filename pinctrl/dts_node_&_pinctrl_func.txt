@@ -74,5 +74,5 @@
 			// drivers/base/dd.c
 			//	---> drivers/base/pinctrl.c
 			//		---> drivers/pinctrl/core.c
-			//			---> drivers/pinctrl/devicetree.c
-			//		
+			//			---> drivers/pinctrl/devicetree.c	
+			//				---> drivers/pinctrl/bcm/pinctrl-bcm2835.c
