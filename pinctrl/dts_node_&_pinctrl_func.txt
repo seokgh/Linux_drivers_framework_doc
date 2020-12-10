@@ -43,6 +43,9 @@
 
 			//	pc->pctl_dev = devm_pinctrl_register(dev, &bcm2835_pinctrl_desc, pc);
 
+
+
+
 			//	step0:
 			//		Probe出来たら、callback 登録するだけ。呼ぶのは、別タイミング。
 			//	step1:
@@ -59,21 +62,17 @@
 			//								bus_for_each_drv()
 			//									__device_attach_driver()
 			//										driver_probe_device()
-			//											really_probe()
-			//												pinctrl_bind_pins()
-			//													devm_pinctrl_get()
+			//											really_probe()		//drivers/base/dd.c
+			//												pinctrl_bind_pins()	//drivers/base/pinctrl.c
+			//													devm_pinctrl_get()	//drivers/pinctrl/core.c, EXPORT_SYMBOL_GPL(devm_pinctrl_get);
 			//														struct pinctrl *pinctrl_get(struct device *dev)	//drivers/pinctrl/core.c
 			//															create_pinctrl()	//drivers/pinctrl/core.c
 			//																pinctrl_dt_to_map()	//drivers/pinctrl/devicetree.c
 			//																	dt_to_map_one_config()	//drivers/pinctrl/devicetree.c
 			//																		if (!ops->dt_node_to_map) {
 			//																		ret = ops->dt_node_to_map(pctldev, np_config, &map, &num_maps);
-
-
-			// dt node to map
-			dpi_gpio0 {					//to pinctrl subsystem??? 28 pins
-				brcm,pins = <0x00 0x01 0x02 0x03 0x04 0x05 0x06 0x07 0x08 0x09 0x0a 0x0b 0x0c 0x0d 0x0e 0x0f 0x10 0x11 0x12 0x13 0x14 0x15 0x16 0x17 0x18 0x19 0x1a 0x1b>;
-				brcm,function = <0x06>;			//drivers/pinctrl/bcm/pinctrl-bcm2835.c:  funcs = of_find_property(np, "brcm,function", NULL);
-				phandle = <0x44>;
-			};
-
+			// drivers/base/dd.c
+			//	---> drivers/base/pinctrl.c
+			//		---> drivers/pinctrl/core.c
+			//			---> drivers/pinctrl/devicetree.c
+			//		
