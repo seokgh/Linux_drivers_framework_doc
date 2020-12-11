@@ -81,14 +81,12 @@ pinctrl-core与底层pinctrl-driver是通过pin controller descriptor进行通�
  *  your driver
  * @owner: module providing the pin controller, used for refcounting
  */
-struct pinctrl_desc {
-
-                          /*pinctrl-driver属性*/
+struct pinctrl_desc {		/*pinctrl-driver属性*/
     const char *name;
     const struct pinctrl_pin_desc *pins;                                                                                                                                                                            
     unsigned int npins;
 
-                          /*pinctrl-drive抽象接口*/
+                          	/*pinctrl-drive抽象接口*/
     const struct pinctrl_ops *pctlops;
     const struct pinmux_ops  *pmxops;
     const struct pinconf_ops *confops;
@@ -244,9 +242,7 @@ extern int  pinctrl_pm_select_idle_state(struct device *dev);
 ----------------------------------------------------------------------------------------------------------------------
 B. pinctrl子系统 应用实例
 ----------------------------------------------------------------------------------------------------------------------
-关于pinctrl是什么，为什么要用pinctrl，源码深度剖析就不赘述
-
-下面我介绍一下如何去使用内核中的pinctrl子系统，以device tree设备树为例。
+下面介绍一下如何去使用内核中的pinctrl子系统，以device tree设备树为例。
 
 当你需要控制某些pin的时候，你首先要在device tree中去按照pinctrl的规则去描述它，然后才能在具体的Device Driver中去使用它：
 ------------------
@@ -384,6 +380,4 @@ pinctrl_select_state(p, default_state);
 gpd2_4引脚被配置成了TOUT_0功能，
 gpd4_3引脚被配置成为了输出功能，并且输出1（高电平）。
 
-
-
-以上就是pinctrl子系统的应用实例
+以上就是pinctrl子系统的应用实例。
