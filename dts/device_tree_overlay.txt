@@ -4,12 +4,13 @@ See
 ---------------------------------------------------------
 Device Tree Overlay とは
 ---------------------------------------------------------
-Linux Kernelには、何時の頃から(Version 4.0辺り?) Device Tree Overlay という機能が追加されています。
+Dynamic DeviceTreeとも呼ぶ。
+Linux Kernelには、何時の頃から(Version 4.0辺り?　4.4辺り?) Device Tree Overlay という機能が追加されています。
 これは、Linuxの動作中の Device Tree に、新たに Device Treeを追加したり、削除したりする機能です。
 
 
 ---------------------------------------------------------
-Device Tree の問題点
+既存 Device Tree の問題点
 ---------------------------------------------------------
 通常は、ハードウェア情報を Device Tree Blob という形で用意しておいて、Linux のBoot時に、この情報に従って、デバイスドライバのロードや初期化を行います。
 しかし、この方法では Linux を起動する前に、ハードウェアが決まっている場合しか使えず、
@@ -86,34 +87,34 @@ Devicetree Overlay ファイルの書き方
 
 
 ---------------------------------------------------------
-Devicetree Overlayの実行方法
+Devicetree Overlayの反映方法
 ---------------------------------------------------------
-dtc コマンド:
+まず、dtcでBuildする:
 
     $ dtc -@ -I dts -O dtb -o my_overlay-overlay.dts my_overlay.dtbo
 
     //The -@ is needed for overlays as it prevents the compiler from looking up the references from the source file, which it - of course - wouldn't find.
 
 
-dtoverlay コマンド:
+上書きする:
+    //まず、下記のように、動いてるシステムのSysfsに、Directoryを作る。xxx名称は、何でも良いが、分かりやすく、上書きしたいDeviceの名称等にすると良い
+    mkdir /sys/kernel/config/device-tree/overlays/xxx
 
-    dtoverlay is used to dynamically load device trees.
+    次には、echo OR catコマンドで、dtboファイルを、反映させる:
+    echo xxx.dtbo >/sys/kernel/config/device-tree/overlays/xxx/path
+    或は、
+    cat xxx.dtbo >/sys/kernel/config/device-tree/overlays/xxx/dtbo
 
-    dtoverlay -a to list all available overlays
-    dtoverlay -l to list the currently applied overlays
-    dtoverlay -h <overlay_name> to get information about any overlay, its parameters and possible values
-    dtoverlay <overlay_name> <param_name>=<param_value> to add an overlay with some parameters
-    dtoverlay -r <overlay_name> to remove a previously loaded overlay
+    Overlayすると、Warningが表示される場合があるが、無視可。
 
-    Note:
-        dtoverlay -l only lists dynamically loaded modules and only those can be removed with dtoverlay -r.
-        Anything that was loaded via /boot/config.txt is considered part of the base device tree.
-        Some overlays have to be added this way and can't be loaded by dtoverlay.
+上書きを確認する:
+    Device Treeと同じく、/proc/device-tree　に、上書きしたnodeと同名のdirectoryがあり、中ではノードとその子ノードの属性も確認できる。
+
 
 ---------------------------------------------------------
-オーバーレイ削除
+Devicetree Overlayの削除方法
 ---------------------------------------------------------
-
+    rmdir /sys/kernel/config/device-tree/overlays/xxx
 
 
 
