@@ -78,13 +78,22 @@ pinctrl subsystem
                                                                                        |         (low level)           |
                                                                                        +----------------+--------------+
 
+//Device Driverでは、下記3行で良い:
+…
+struct pinctrl * p = devm_pinctrl_get(&pdev->dev);
+struct pinctrl_state * default_state = pinctrl_lookup_state(p, "pwm-on");
+pinctrl_select_state(p, default_state);
+…
 
-ざっくりFILE間の関係:　いつもの通りだ。
+
+//ざっくりFILE間の関係:　
 pinctrl_gpio_set_config()   //drivers/pinctrl/core.c, EXPORT_SYMBOL_GPL(pinctrl_gpio_set_config);したSymbolで、drivers/gpio/gpiolib.cでもCallしてる。
     ---> pinconf_set_config()   //drivers/pinctrl/pinconf.c  
         ---> return ops->pin_config_set(pctldev, pin, configs, nconfigs);
                       　V
             ---> return bcm2835_pinconf_set()  //drivers/pinctrl/bcm/pinctrl-bcm2835.c
+いつもの通り。
+
 
 ----------------------------------------
 struct pinctrl_desc
