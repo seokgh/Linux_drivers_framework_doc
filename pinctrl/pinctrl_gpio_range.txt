@@ -1,0 +1,63 @@
+		pin ids of pinctrl subsystem and gpio subsystem
+
+		pinctrl subsystemとgpio subsystemの協同作業:
+		pinctrl subsystemに見える全てのPINは、GPIOとしても使用可能なので、
+		自分のどのPINが、相手にはどのPINになるのか、互いに該当するPIN情報を、pinctrl subsystemにて、説明しておく必要があるのだ。
+
+		説明するのに、使うデータ構造は、
+			struct pinctrl_gpio_range {}
+
+		説明内容を登録する方法は、
+			pinctrl_add_gpio_range()
+
+
+		例えば、とあるSOCにて、
+			pinctrl subsystemにてのPIN番号: 05〜15 が、gpio subsystemにてのGPIO番号: 25〜35 となる
+			pinctrl subsystemにてのPIN番号: 30〜35 が、gpio subsystemにてのGPIO番号: 40〜45 となる
+		と仮定すると、
+		下記のような方法で、xxx pinctrl driverにて、2個の GPIO rangeを登録する:
+
+			struct gpio_chip	gc_a;
+			struct gpio_chip	gc_b;
+
+			static struct pinctrl_gpio_range gpio_range_a = {
+				.name = "chip a",
+				.id   = 0,
+				.base = 25,	// start number of gpio
+				.pin_base = 5,	// start number of pinctrl
+				.npins = 11,
+				.gc = &gc_a,	//
+			};
+		
+			static struct pinctrl_gpio_range gpio_range_b = {
+				.name = "chip b",
+				.id   = 0,
+				.base = 40,	// start number of gpio
+				.pin_base = 30,	// start number of pinctrl
+				.npins = 6,
+				.gc = &gc_b,	//
+			};
+
+
+			..._probe(struct platform_device *pdev)
+			{
+				struct pinctrl_dev	*pctl;
+				...
+				pinctrl_add_gpio_range(pctl, &gpio_range_a);
+				pinctrl_add_gpio_range(pctl, &gpio_range_b);
+				...
+			}
+
+		そして、
+		カーネルのgpiolib driverをベースにするxxxx device driverで、GPIOを申請/返す際に、gpio_request()/gpio_free()を呼ぶのですが、
+		これは、pinctrl_request_gpio()/pinctrl_free_gpio() 汎用APIを呼ぶことになる。
+		pinctrl subsystemは、申請するGPIO番号で、上記Range情報から、該当PINを探し出し、そのPINが、他機能によって既に使われてるか、確認等をする。
+
+		もちろん、pinctrl subsystemのpinctrl_request_gpio()/pinctrl_free_gpio() 汎用APIをサポートしてる構造体
+		struct pinmux_ops {
+			...
+			.enable = gpio_request_enable,
+			.disable = gpio_disable_free,
+			...
+		};
+		のenable/disable関数ポインターメンバーも実装しないと行けない。
