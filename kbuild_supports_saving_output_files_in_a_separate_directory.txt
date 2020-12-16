@@ -14,3 +14,8 @@ from kernel root directory Makefile:
 #
 # The O= assignment takes precedence over the KBUILD_OUTPUT environment
 # variable.
+
+Ex:
+  mkdir build/
+  make ARCH=arm CROSS_COMPILE=arm-linux-gnueabi- bcm2711_defconfig O=build/
+  time make ARCH=arm CROSS_COMPILE=arm-linux-gnueabi- zImage modules dtbs O=build/ -j16
