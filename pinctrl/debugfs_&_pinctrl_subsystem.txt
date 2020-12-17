@@ -1,0 +1,396 @@
+----------------------------------------------------------------
+$ sudo ls -la /sys/kernel/debug/pinctrl/
+----------------------------------------------------------------
+total 0
+drwxr-xr-x  3 root root 0 Dec 31  1969 .
+drwx------ 38 root root 0 Dec 31  1969 ..
+drwxr-xr-x  2 root root 0 Dec 31  1969 fe200000.gpio-pinctrl-bcm2835
+-r--r--r--  1 root root 0 Dec 31  1969 pinctrl-devices
+-r--r--r--  1 root root 0 Dec 31  1969 pinctrl-handles
+-r--r--r--  1 root root 0 Dec 31  1969 pinctrl-maps
+
+----------------------------------------------------------------
+$ sudo cat /sys/kernel/debug/pinctrl/pinctrl-devices
+----------------------------------------------------------------
+name [pinmux] [pinconf]
+pinctrl-bcm2835 yes yes
+
+----------------------------------------------------------------
+$ sudo cat /sys/kernel/debug/pinctrl/pinctrl-handles
+----------------------------------------------------------------
+Requested pin control handlers their pinmux maps:
+device: fe201000.serial current state: default
+  state: default
+    type: MUX_GROUP controller pinctrl-bcm2835 group: gpio30 (30) function: alt3 (7)
+    type: CONFIGS_PIN controller pinctrl-bcm2835 pin gpio30 (30)config 00000280
+    type: MUX_GROUP controller pinctrl-bcm2835 group: gpio31 (31) function: alt3 (7)
+    type: CONFIGS_PIN controller pinctrl-bcm2835 pin gpio31 (31)config 00000080
+    type: MUX_GROUP controller pinctrl-bcm2835 group: gpio32 (32) function: alt3 (7)
+    type: CONFIGS_PIN controller pinctrl-bcm2835 pin gpio32 (32)config 00000080
+    type: MUX_GROUP controller pinctrl-bcm2835 group: gpio33 (33) function: alt3 (7)
+    type: CONFIGS_PIN controller pinctrl-bcm2835 pin gpio33 (33)config 00000280
+device: fe300000.mmcnr current state: default
+  state: default
+    type: MUX_GROUP controller pinctrl-bcm2835 group: gpio34 (34) function: alt3 (7)
+    type: CONFIGS_PIN controller pinctrl-bcm2835 pin gpio34 (34)config 00000080
+    type: MUX_GROUP controller pinctrl-bcm2835 group: gpio35 (35) function: alt3 (7)
+    type: CONFIGS_PIN controller pinctrl-bcm2835 pin gpio35 (35)config 00000280
+    type: MUX_GROUP controller pinctrl-bcm2835 group: gpio36 (36) function: alt3 (7)
+    type: CONFIGS_PIN controller pinctrl-bcm2835 pin gpio36 (36)config 00000280
+    type: MUX_GROUP controller pinctrl-bcm2835 group: gpio37 (37) function: alt3 (7)
+    type: CONFIGS_PIN controller pinctrl-bcm2835 pin gpio37 (37)config 00000280
+    type: MUX_GROUP controller pinctrl-bcm2835 group: gpio38 (38) function: alt3 (7)
+    type: CONFIGS_PIN controller pinctrl-bcm2835 pin gpio38 (38)config 00000280
+    type: MUX_GROUP controller pinctrl-bcm2835 group: gpio39 (39) function: alt3 (7)
+    type: CONFIGS_PIN controller pinctrl-bcm2835 pin gpio39 (39)config 00000280
+device: onewire@0 current state: default
+  state: default
+    type: MUX_GROUP controller pinctrl-bcm2835 group: gpio4 (4) function: gpio_in (0)
+    type: CONFIGS_PIN controller pinctrl-bcm2835 pin gpio4 (4)config 00000080
+device: fe204000.spi current state: default
+  state: default
+    type: MUX_GROUP controller pinctrl-bcm2835 group: gpio9 (9) function: alt0 (4)
+    type: MUX_GROUP controller pinctrl-bcm2835 group: gpio10 (10) function: alt0 (4)
+    type: MUX_GROUP controller pinctrl-bcm2835 group: gpio11 (11) function: alt0 (4)
+    type: MUX_GROUP controller pinctrl-bcm2835 group: gpio8 (8) function: gpio_out (1)
+    type: MUX_GROUP controller pinctrl-bcm2835 group: gpio7 (7) function: gpio_out (1)
+device: bcm2835_audio current state: default
+  state: default
+    type: MUX_GROUP controller pinctrl-bcm2835 group: gpio40 (40) function: alt0 (4)
+    type: MUX_GROUP controller pinctrl-bcm2835 group: gpio41 (41) function: alt0 (4)
+device: fe804000.i2c current state: default
+  state: default
+    type: MUX_GROUP controller pinctrl-bcm2835 group: gpio2 (2) function: alt0 (4)
+    type: CONFIGS_PIN controller pinctrl-bcm2835 pin gpio2 (2)config 00000280
+    type: MUX_GROUP controller pinctrl-bcm2835 group: gpio3 (3) function: alt0 (4)
+    type: CONFIGS_PIN controller pinctrl-bcm2835 pin gpio3 (3)config 00000280
+
+
+----------------------------------------------------------------
+$ sudo cat /sys/kernel/debug/pinctrl/pinctrl-maps
+----------------------------------------------------------------
+Pinctrl maps:
+device fe201000.serial
+state default
+type MUX_GROUP (2)
+controlling device fe200000.gpio
+group gpio30
+function alt3
+
+device fe201000.serial
+state default
+type CONFIGS_PIN (3)
+controlling device fe200000.gpio
+pin gpio30
+config 00000280
+
+device fe201000.serial
+state default
+type MUX_GROUP (2)
+controlling device fe200000.gpio
+group gpio31
+function alt3
+
+device fe201000.serial
+state default
+type CONFIGS_PIN (3)
+controlling device fe200000.gpio
+pin gpio31
+config 00000080
+
+device fe201000.serial
+state default
+type MUX_GROUP (2)
+controlling device fe200000.gpio
+group gpio32
+function alt3
+
+device fe201000.serial
+state default
+type CONFIGS_PIN (3)
+controlling device fe200000.gpio
+pin gpio32
+config 00000080
+
+device fe201000.serial
+state default
+type MUX_GROUP (2)
+controlling device fe200000.gpio
+group gpio33
+function alt3
+
+device fe201000.serial
+state default
+type CONFIGS_PIN (3)
+controlling device fe200000.gpio
+pin gpio33
+config 00000280
+
+device fe300000.mmcnr
+state default
+type MUX_GROUP (2)
+controlling device fe200000.gpio
+group gpio34
+function alt3
+
+device fe300000.mmcnr
+state default
+type CONFIGS_PIN (3)
+controlling device fe200000.gpio
+pin gpio34
+config 00000080
+
+device fe300000.mmcnr
+state default
+type MUX_GROUP (2)
+controlling device fe200000.gpio
+group gpio35
+function alt3
+
+device fe300000.mmcnr
+state default
+type CONFIGS_PIN (3)
+controlling device fe200000.gpio
+pin gpio35
+config 00000280
+
+device fe300000.mmcnr
+state default
+type MUX_GROUP (2)
+controlling device fe200000.gpio
+group gpio36
+function alt3
+
+device fe300000.mmcnr
+state default
+type CONFIGS_PIN (3)
+controlling device fe200000.gpio
+pin gpio36
+config 00000280
+
+device fe300000.mmcnr
+state default
+type MUX_GROUP (2)
+controlling device fe200000.gpio
+group gpio37
+function alt3
+
+device fe300000.mmcnr
+state default
+type CONFIGS_PIN (3)
+controlling device fe200000.gpio
+pin gpio37
+config 00000280
+
+device fe300000.mmcnr
+state default
+type MUX_GROUP (2)
+controlling device fe200000.gpio
+group gpio38
+function alt3
+
+device fe300000.mmcnr
+state default
+type CONFIGS_PIN (3)
+controlling device fe200000.gpio
+pin gpio38
+config 00000280
+
+device fe300000.mmcnr
+state default
+type MUX_GROUP (2)
+controlling device fe200000.gpio
+group gpio39
+function alt3
+
+device fe300000.mmcnr
+state default
+type CONFIGS_PIN (3)
+controlling device fe200000.gpio
+pin gpio39
+config 00000280
+
+device onewire@0
+state default
+type MUX_GROUP (2)
+controlling device fe200000.gpio
+group gpio4
+function gpio_in
+
+device onewire@0
+state default
+type CONFIGS_PIN (3)
+controlling device fe200000.gpio
+pin gpio4
+config 00000080
+
+device fe204000.spi
+state default
+type MUX_GROUP (2)
+controlling device fe200000.gpio
+group gpio9
+function alt0
+
+device fe204000.spi
+state default
+type MUX_GROUP (2)
+controlling device fe200000.gpio
+group gpio10
+function alt0
+
+device fe204000.spi
+state default
+type MUX_GROUP (2)
+controlling device fe200000.gpio
+group gpio11
+function alt0
+
+device fe204000.spi
+state default
+type MUX_GROUP (2)
+controlling device fe200000.gpio
+group gpio8
+function gpio_out
+
+device fe204000.spi
+state default
+type MUX_GROUP (2)
+controlling device fe200000.gpio
+group gpio7
+function gpio_out
+
+device bcm2835_audio
+state default
+type MUX_GROUP (2)
+controlling device fe200000.gpio
+group gpio40
+function alt0
+
+device bcm2835_audio
+state default
+type MUX_GROUP (2)
+controlling device fe200000.gpio
+group gpio41
+function alt0
+
+device fe804000.i2c
+state default
+type MUX_GROUP (2)
+controlling device fe200000.gpio
+group gpio2
+function alt0
+
+device fe804000.i2c
+state default
+type CONFIGS_PIN (3)
+controlling device fe200000.gpio
+pin gpio2
+config 00000280
+
+device fe804000.i2c
+state default
+type MUX_GROUP (2)
+controlling device fe200000.gpio
+group gpio3
+function alt0
+
+device fe804000.i2c
+state default
+type CONFIGS_PIN (3)
+controlling device fe200000.gpio
+pin gpio3
+config 00000280
+
+
+
+
+
+
+
+
+
+
+
+
+----------------------------------------------------------------
+$ sudo ls -lah /sys/kernel/debug/pinctrl/fe200000.gpio-pinctrl-bcm2835/
+----------------------------------------------------------------
+total 0
+drwxr-xr-x 2 root root 0 Dec 31  1969 .
+drwxr-xr-x 3 root root 0 Dec 31  1969 ..
+-r--r--r-- 1 root root 0 Dec 31  1969 gpio-ranges
+-r--r--r-- 1 root root 0 Dec 31  1969 pinconf-groups
+-r--r--r-- 1 root root 0 Dec 31  1969 pinconf-pins
+-r--r--r-- 1 root root 0 Dec 31  1969 pingroups
+-r--r--r-- 1 root root 0 Dec 31  1969 pinmux-functions
+-r--r--r-- 1 root root 0 Dec 31  1969 pinmux-pins
+-r--r--r-- 1 root root 0 Dec 31  1969 pins
+
+----------------------------------------------------------------
+$ sudo cat /sys/kernel/debug/pinctrl/fe200000.gpio-pinctrl-bcm2835/gpio-ranges
+----------------------------------------------------------------
+GPIO ranges handled:
+0: pinctrl-bcm2835 GPIOS [0 - 53] PINS [0 - 53]
+
+----------------------------------------------------------------
+$ sudo cat /sys/kernel/debug/pinctrl/fe200000.gpio-pinctrl-bcm2835/pins
+----------------------------------------------------------------
+registered pins: 54
+pin 0 (gpio0) function gpio_in in hi; irq 0 (none)
+pin 1 (gpio1) function gpio_in in hi; irq 0 (none)
+pin 2 (gpio2) function alt0 in hi; irq 0 (none)
+pin 3 (gpio3) function alt0 in hi; irq 0 (none)
+pin 4 (gpio4) function gpio_in in hi; irq 0 (none)
+pin 5 (gpio5) function gpio_in in hi; irq 0 (none)
+pin 6 (gpio6) function gpio_in in hi; irq 0 (none)
+pin 7 (gpio7) function gpio_out in hi; irq 0 (none)
+pin 8 (gpio8) function gpio_out in hi; irq 0 (none)
+pin 9 (gpio9) function alt0 in lo; irq 0 (none)
+pin 10 (gpio10) function alt0 in lo; irq 0 (none)
+pin 11 (gpio11) function alt0 in lo; irq 0 (none)
+pin 12 (gpio12) function gpio_in in lo; irq 0 (none)
+pin 13 (gpio13) function gpio_in in lo; irq 0 (none)
+pin 14 (gpio14) function alt5 in hi; irq 0 (none)
+pin 15 (gpio15) function alt5 in hi; irq 0 (none)
+pin 16 (gpio16) function gpio_in in lo; irq 0 (none)
+pin 17 (gpio17) function gpio_in in lo; irq 0 (none)
+pin 18 (gpio18) function gpio_in in lo; irq 0 (none)
+pin 19 (gpio19) function gpio_in in lo; irq 0 (none)
+pin 20 (gpio20) function gpio_in in lo; irq 0 (none)
+pin 21 (gpio21) function gpio_in in lo; irq 0 (none)
+pin 22 (gpio22) function gpio_in in lo; irq 0 (none)
+pin 23 (gpio23) function gpio_in in lo; irq 0 (none)
+pin 24 (gpio24) function gpio_in in lo; irq 0 (none)
+pin 25 (gpio25) function gpio_in in lo; irq 0 (none)
+pin 26 (gpio26) function gpio_in in lo; irq 0 (none)
+pin 27 (gpio27) function gpio_in in lo; irq 0 (none)
+pin 28 (gpio28) function alt5 in hi; irq 0 (none)
+pin 29 (gpio29) function alt5 in lo; irq 0 (none)
+pin 30 (gpio30) function alt3 in lo; irq 0 (none)
+pin 31 (gpio31) function alt3 in lo; irq 0 (none)
+pin 32 (gpio32) function alt3 in hi; irq 0 (none)
+pin 33 (gpio33) function alt3 in hi; irq 0 (none)
+pin 34 (gpio34) function alt3 in hi; irq 0 (none)
+pin 35 (gpio35) function alt3 in hi; irq 0 (none)
+pin 36 (gpio36) function alt3 in hi; irq 0 (none)
+pin 37 (gpio37) function alt3 in hi; irq 0 (none)
+pin 38 (gpio38) function alt3 in hi; irq 0 (none)
+pin 39 (gpio39) function alt3 in hi; irq 0 (none)
+pin 40 (gpio40) function alt0 in lo; irq 0 (none)
+pin 41 (gpio41) function alt0 in lo; irq 0 (none)
+pin 42 (gpio42) function gpio_out in lo; irq 0 (none)
+pin 43 (gpio43) function gpio_in in hi; irq 0 (none)
+pin 44 (gpio44) function alt1 in hi; irq 0 (none)
+pin 45 (gpio45) function alt1 in hi; irq 0 (none)
+pin 46 (gpio46) function gpio_in in lo; irq 0 (none)
+pin 47 (gpio47) function gpio_in in lo; irq 0 (none)
+pin 48 (gpio48) function gpio_in in lo; irq 0 (none)
+pin 49 (gpio49) function gpio_in in lo; irq 0 (none)
+pin 50 (gpio50) function gpio_in in lo; irq 0 (none)
+pin 51 (gpio51) function gpio_in in lo; irq 0 (none)
+pin 52 (gpio52) function gpio_in in lo; irq 0 (none)
+pin 53 (gpio53) function gpio_in in lo; irq 0 (none)
+
+...
+...
+
