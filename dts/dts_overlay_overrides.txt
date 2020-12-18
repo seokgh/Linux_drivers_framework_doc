@@ -1,3 +1,6 @@
+-------------------------------------------------------------------------------------------------------------------------
+__overlay__
+-------------------------------------------------------------------------------------------------------------------------
 See
     Documentation/devicetree/overlay-notes.txt
 
@@ -105,7 +108,7 @@ Devicetree Overlayの反映方法
 
 
 上書きする:
-    //まず、下記のように、動いてるシステムのSysfsに、Directoryを作る。xxx名称は、何でも良いが、分かりやすく、上書きしたいDeviceの名称等にすると良い
+    //まず、下記のように、動いてるシステムのSysfsに、Directoryを作る。xxx名称は、何でも良いが、分かりやすく、上書きしたいDeviceの名称等にすると良い。
     mkdir /sys/kernel/config/device-tree/overlays/xxx
 
     次には、echo OR catコマンドで、dtboファイルを、反映させる:
@@ -126,3 +129,34 @@ Devicetree Overlayの削除方法
 
 
 
+
+
+
+-------------------------------------------------------------------------------------------------------------------------
+__overrides__
+-------------------------------------------------------------------------------------------------------------------------
+为了避免需要大量的设备树覆盖，并减少外围设备用户修改DTS文件的需求，Raspberry Pi加载程序支持一项新功能-设备树参数。
+
+dtsを大量にoverlayするのを避けるために、またペリフェラル開発者がdtsに手を入れるのを減らすために、「Device Treeのパラメーター」という機能を追加した。
+まるで、modprobe xxx.ko にパラメーターを付ける機能とか、kernel cmdlineなどのような、パラメーター機能のことを言う。
+
+Device Treeのパラメーターは、
+/ node {} 配下に
+    __overrides__ node {
+        ...
+    };
+を追加することによって、定義される。
+
+__overrides__ node format:
+    パラメーター名称 = a phandle (reference to a label), "property";
+                                                          ^
+                                                          |
+                                                          + string/integer(cell)/boolean properties are supported.
+                                                        
+                                                        string  parameters: 文字列パラメータにより、ターゲットプロパティが拡大、縮小、作成される可能性がある。
+                                                                        Note:
+                                                                        that properties called status are treated specially:
+                                                                            non-zero/true/yes/on => "okay" に変換される;
+                                                                            zero/false/no/off 　　=> "disabled" に変換される;
+
+                                                        integer parameters: 
