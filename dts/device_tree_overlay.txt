@@ -8,7 +8,6 @@ Dynamic DeviceTreeとも呼ぶ。
 Linux Kernelには、何時の頃から(Version 4.0辺り?　4.4辺り?) Device Tree Overlay という機能が追加されています。
 これは、Linuxの動作中の Device Tree に、新たに Device Treeを追加したり、削除したりする機能です。
 
-
 ---------------------------------------------------------
 既存 Device Tree の問題点
 ---------------------------------------------------------
@@ -21,7 +20,8 @@ Linux Kernelには、何時の頃から(Version 4.0辺り?　4.4辺り?) Device 
 多数の拡張ボードを備えたPlatformでは、別の拡張ボードを使用する度に、Device Treeを再コンパイルする必要があります。
 また、FPGA のような、Reconfig可能なHardwareとも、相性が良くありません。
 
-したがって、実行時にDevice Treeでデバイスを追加、または変更できるOverlayメカニズムは、すごいです。
+したがって、実行時にDevice Treeで、デバイスを追加/変更できるOverlayメカニズムは、すごいです。
+
 
 ---------------------------------------------------------
 Devicetree Overlay でできること
