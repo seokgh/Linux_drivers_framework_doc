@@ -141,20 +141,53 @@ dtsを大量にoverlayするのを避けるために、またペリフェラル�
 Device Treeのパラメーターは、
 / node {} 配下に
     __overrides__ node {
-        ...
+        ...   
     };
 を追加することによって、定義される。
 
-__overrides__ node format:
-    パラメーター名称 = a phandle (reference to a label), "property";
-                                                          ^
-                                                          |
-                                                          + string/integer(cell)/boolean properties are supported.
-                                                        
-                                                        string  parameters: 文字列パラメータにより、ターゲットプロパティが拡大、縮小、作成される可能性がある。
-                                                                        Note:
-                                                                        that properties called status are treated specially:
-                                                                            non-zero/true/yes/on => "okay" に変換される;
-                                                                            zero/false/no/off 　　=> "disabled" に変換される;
 
-                                                        integer parameters: 
+---------------------------------
+__overrides__ node format:
+---------------------------------
+    パラメーター名称 = a phandle (reference to a label), "property";
+                                                          |
++---------------------------------------------------------+
+V
+string、integer、boolean properties are supported:
+                                                        
+string  parameters:
+    文字列パラメータにより、ターゲットプロパティが拡大、縮小、作成される可能性がある。
+    
+    name = <&label>,"property";
+    
+    Note:
+        that properties called status are treated specially:
+            non-zero/true/yes/on => "okay"     に変換される;
+            zero/false/no/off 　　=> "disabled" に変換される;
+
+integer parameters: 
+        ...
+        name = <&label>,"property.offset"; // 8-bit
+        name = <&label>,"property;offset"; // 16-bit
+        name = <&label>,"property:offset"; // 32-bit
+        name = <&label>,"property#offset"; // 64-bit
+        ...
+        ラベル、プロパティ、オフセットは、適切な値に置き換えられる。
+        
+        オフセットは、プロパティの開始を基準にしたバイト数（デフォルトでは10進数）で指定し、区切り文字(. ; : #)は、パラメーターのSIZEを示す。
+
+        以前と違うところは、
+            整数パラメーターは、存在しないプロパティを参照できる、また、
+            既存のプロパティのENDを超えるオフセットを参照することも出来る。
+        
+boolean_property;                          // Set 'boolean_property' to true
+        name = <&label>,"property?";       //
+        name = <&label>,"property!";       //
+        ...
+
+byte string parameters:
+        mac_address = <&ethernet0>,"local_mac_address[";
+        
+        The [ was chosen to match the DT syntax for declaring a byte string:
+            local_mac_address = [aa bb cc dd ee ff];
+        
