@@ -1,9 +1,9 @@
 Linux GPIO subsystem:
 大体の構造体の抽象化と、登録:
-    1.GPIO記述子:           gpio_desc
-    2.GPIO操作セットの抽象化: gpio_chip
-    3.GPIOデバイス:         gpio_device
-    4.GPIOをGpiolibに登録:  gpiochip_add
+    1.GPIO Pin desc:        gpio_desc
+    2.GPIO Controller ops:  gpio_chip
+    3.GPIO Bank:            gpio_device
+    4.Register to Gpiolib:  gpiochip_add
     
 --------------------------------------------------------------------------------
 pinctrl subsystem
