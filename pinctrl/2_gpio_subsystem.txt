@@ -1,3 +1,10 @@
+Linux GPIO subsystem:
+大体の構造体の抽象化と、登録:
+    1.GPIO記述子:           gpio_desc
+    2.GPIO操作セットの抽象化: gpio_chip
+    3.GPIOデバイス:         gpio_device
+    4.GPIOをGpiolibに登録:  gpiochip_add
+    
 --------------------------------------------------------------------------------
 pinctrl subsystem
     &
@@ -58,6 +65,7 @@ gpio subsystem
 pinctrl subsystemを通じて、PINをGPIO functionとして
 設定した場合に、その後のことは、gpio subsystemを使えば良い。
 設定してない場合には、もちろん、gpio subsystemを使わない。
+
 
 sample dts:
         ...
