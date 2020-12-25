@@ -24,6 +24,8 @@ kthread_create_list:					//kernel/kthread.c
 	struct workqueue_struct *system_power_efficient_wq;
 	struct workqueue_struct *system_freezable_power_efficient_wq;
 
+gpio_devices:
+	gpio banks list
 
 of_root:
 
