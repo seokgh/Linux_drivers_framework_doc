@@ -1,5 +1,5 @@
 Ex:
-
+//vx.x
 static struct file_operations led_fops = {
     .owner  = THIS_MODULE,
     .open   = led_open,
@@ -14,6 +14,21 @@ static struct file_operations led_fops = {
     .release = led_close,
 };
 
+//v5.x drivers/spi/spidev.c
+static const struct file_operations spidev_fops = {
+	.owner =	THIS_MODULE,
+	/* REVISIT switch to aio primitives, so that userspace
+	 * gets more complete API coverage.  It'll simplify things
+	 * too, except for the locking.
+	 */
+	.write =	spidev_write,
+	.read =		spidev_read,
+	.unlocked_ioctl = spidev_ioctl,
+	.compat_ioctl = spidev_compat_ioctl,
+	.open =		spidev_open,
+	.release =	spidev_release,
+	.llseek =	no_llseek,
+};
 
 -------------------------------------------------------------------------------
 ioctl:
