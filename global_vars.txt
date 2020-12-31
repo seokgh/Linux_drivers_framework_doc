@@ -46,4 +46,5 @@ intc_parent_list:
 
 irq_desc[NR_IRQS]:
 
-
+device_list:
+	spi_board_info
