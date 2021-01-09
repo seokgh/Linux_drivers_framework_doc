@@ -14,10 +14,6 @@
  * it under the terms of the BSD Licence, GNU General Public License
  * as published by the Free Software Foundation; either version 2 of the
  * License, or (at your option) any later version
- *
- *
- * kernel v3.4
- *
  */
 #include <linux/module.h>
 #include <linux/errno.h>
