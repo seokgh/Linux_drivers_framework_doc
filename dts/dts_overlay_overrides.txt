@@ -65,12 +65,11 @@ Devicetree Overlay ファイルの書き方
 / {
     fragment@0 {              /* node名は何でも良い */
         target = <phandle>;   /* overlayするnodeの phandle */
-        /*　OR　*/
-　　　　 target-path="/path";  /* overlayするnodeの path */
+      //target-path="/path";  /* overlayするnodeの path でも可 */
 
         __overlay__ {
-                /* Overlayする property 定義 たち*/
-                /* Overlayする node 定義 たち*/
+                /* Overlayする property らを定義 */
+                /* Overlayする node     らを定義 */
         };
     };
 };
