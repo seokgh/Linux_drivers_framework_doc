@@ -1,6 +1,8 @@
 ----------------------------------------------------------------
 from kernel /Documentation/devicetree/bindings/gpio/gpio.txt
 ----------------------------------------------------------------
+
+
 Specifying GPIO information for devices
 =======================================
 
