@@ -1,3 +1,20 @@
+linux fs types:
+        
+        jffs/jffs2
+        yaffs/yaffs2        
+        fat32
+        ext2/3/4
+        ubifs
+        cramfs
+        ...
+        devfs
+        procfs
+        ramdisk
+        ...
+
+
+
+------------------------------------------------------------------------------------
 seokgh@jetson-nano:~$ df -aTh
 ------------------------------------------------------------------------------------
 Filesystem     Type             Size  Used Avail Use% Mounted on
