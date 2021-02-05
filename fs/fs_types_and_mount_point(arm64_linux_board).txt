@@ -1,15 +1,22 @@
 linux fs types:
+        ramdisk         //RAM, とあるサイズ分のRAM領域を使って、Disk領域をシミュレーションする(後でDisk上本当のFS領域を、ここにMountする)
+        tmpfs           //RAM, kernelにより生成(ただとあるRAM領域を、サイズ指定して、fsとして使用する)
         
-        jffs/jffs2
-        yaffs/yaffs2        
-        fat32
-        ext2/3/4
-        ubifs
+        jffs/jffs2      //主に、NOR flash向け
+        ubifs           //jffs2の新しいVer、大容量可
+        yaffs/yaffs2    //主に、NAND flash向け
+        fat32           //主に、SD/eMMC向け(Microsoft)
+        ext2/3/4        //主に、SD/eMMC向け
+        
         cramfs
         ...
-        devfs
-        procfs
-        ramdisk
+        nfs             //
+        samba           //
+        ...
+        devfs           //kernel 2.6まででしたっけ？今は基本使わない
+        procfs          //kernelにより生成(process fs)
+        sysfs           //kernelにより生成
+        
         ...
 
 
