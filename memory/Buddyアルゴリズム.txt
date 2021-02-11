@@ -1,0 +1,3 @@
+50年前に作られたメモリ管理アルゴリズム「Buddy memory allocation」
+
+
