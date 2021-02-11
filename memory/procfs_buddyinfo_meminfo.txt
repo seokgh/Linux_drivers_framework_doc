@@ -1,4 +1,4 @@
-dma, normal, high_memory仮想メモリ領域を、Buddyアルゴリズムで管理してる。
+[dma, normal, high_memory]仮想メモリ領域を、Buddyアルゴリズムで管理してる。
 
 Buddyアルゴリズム:
   空いてるPageを、2のｎ乗を単位にして管理する。
@@ -130,4 +130,10 @@ DirectMap1G:     9437184 kB
 
 
 
+//カーネル仮想メモリ領域内にて、
+//物理メモリ領域の仮想メモリ区間(DMAゾンと、Normalゾン)では、下記方法で、物理アドレス<--->仮想アドレス　変換が出来る:
+virt_to_phys()
+phys_to_virt()
 
+＊DMAゾンとNormalゾンのみで、使える。
+high_memory区間の　物理アドレス<−>仮想アドレス　変換は、簡単には出来ない
