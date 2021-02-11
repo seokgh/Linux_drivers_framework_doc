@@ -1,0 +1,71 @@
+DMA, Normal, High
+
+
+z490 ubuntu:
+-------------------------------------------------------------
+seokgh@Z490 ~ $ cat /proc/buddyinfo 
+Node 0, zone      DMA      0      0      0      1      2      1      1      0      1      2      2 
+Node 0, zone    DMA32     13     10     14      9     14     14     16     11      9      9    589 
+Node 0, zone   Normal  18944   5996   4432   3377   2624   1815   1070    223    109     54   1889 
+seokgh@Z490 ~ $ 
+
+
+
+seokgh@Z490 ~ $ cat /proc/meminfo 
+MemTotal:       16304696 kB
+MemFree:        11516528 kB
+MemAvailable:   13169688 kB
+Buffers:           75204 kB
+Cached:          1725880 kB
+SwapCached:            0 kB
+Active:          2953024 kB
+Inactive:        1032204 kB
+Active(anon):    2191880 kB
+Inactive(anon):   135400 kB
+Active(file):     761144 kB
+Inactive(file):   896804 kB
+Unevictable:       12916 kB
+Mlocked:           12916 kB
+SwapTotal:       2097148 kB
+SwapFree:        2097148 kB
+Dirty:              4004 kB
+Writeback:             0 kB
+AnonPages:       2197256 kB
+Mapped:           748524 kB
+Shmem:            138240 kB
+KReclaimable:     335356 kB
+Slab:             555656 kB
+SReclaimable:     335356 kB
+SUnreclaim:       220300 kB
+KernelStack:       19872 kB
+PageTables:        29044 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:    10249496 kB
+Committed_AS:    7759908 kB
+VmallocTotal:   34359738367 kB
+VmallocUsed:       81280 kB
+VmallocChunk:          0 kB
+Percpu:            13888 kB
+HardwareCorrupted:     0 kB
+AnonHugePages:         0 kB
+ShmemHugePages:        0 kB
+ShmemPmdMapped:        0 kB
+FileHugePages:         0 kB
+FilePmdMapped:         0 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:               0 kB
+DirectMap4k:      575872 kB
+DirectMap2M:     7723008 kB
+DirectMap1G:     9437184 kB
+seokgh@Z490 ~ $ 
+
+
+
+jetson nano:
+-------------------------------------------------------------
