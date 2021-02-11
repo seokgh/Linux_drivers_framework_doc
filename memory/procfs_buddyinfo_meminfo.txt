@@ -56,8 +56,14 @@ Hugepagesize:       2048 kB
 
 
 seokgh@jetson-nano:~$ cat /proc/buddyinfo 
-Node 0, zone      DMA      6      8      6      6      4      7      8      8      6     10    484 
+Node 0, zone      DMA      6      8      6      6      4      7      8      8      6     10    484
 Node 0, zone   Normal    190     84     48    196     81     24     46     54     13     28     52
+                  ^       ^       ^      ^      ^      ^      ^      ^      ^      ^      ^      ^
+                  |       |       |      |      + 4 pageが...
+                  |       |       |      + 3 pageが空いてるmemory数
+                  |       |       + 2 pageが空いてるmemory数
+                  |       + 1 pageが空いてるmemory数
+                  + zone name
 
 
 -------------------------------------------------------------
