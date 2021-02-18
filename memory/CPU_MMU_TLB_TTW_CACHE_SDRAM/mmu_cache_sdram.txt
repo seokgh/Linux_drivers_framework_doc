@@ -1,11 +1,7 @@
 
-
-
-
-
-     ARM RAM Access Flow:                                          TLB: Translation Lookside Buffer        
+       SDRAM Access Flow:                                          TLB: Translation Lookside Buffer        
                                                                    TTW: Translation Table Walk (read sdram)
-     unit:                                                                                                 
+       unit:                                                                                                 
         arm v4, mmu, cache, sdram                                  PAGE_SIZE: 4k?                          
                                                                                                            
                                                                                                            
