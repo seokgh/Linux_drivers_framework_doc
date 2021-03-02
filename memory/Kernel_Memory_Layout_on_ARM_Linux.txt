@@ -32,7 +32,7 @@ ffff4000	ffffffff	cache aliasing on ARMv6 and later CPUs.
 ffff1000	ffff7fff	Reserved.
 				Platforms must not use this address range.
 
-ffff0000	ffff0fff	CPU vector page.
+ffff0000	ffff0fff	CPU vector page.					//kernel vector table
 				The CPU vectors are mapped here if the
 				CPU supports vector relocation (control
 				register V bit.)
@@ -47,13 +47,13 @@ fffe8000	fffeffff	DTCM mapping area for platforms with
 fffe0000	fffe7fff	ITCM mapping area for platforms with
 				ITCM mounted inside the CPU.
 
-ffc00000	ffefffff	Fixmap mapping region.  Addresses provided
-				by fix_to_virt() will be located here.
+ffc00000	ffefffff	Fixmap mapping region.  Addresses provided		//kernel DMA memory mapped area.
+				by fix_to_virt() will be located here.			//dma_alloc_xxx() family functions map the DMA buffer in this section.
 
 fee00000	feffffff	Mapping of PCI I/O space. This is a static
 				mapping within the vmalloc space.
 
-VMALLOC_START	VMALLOC_END-1	vmalloc() / ioremap() space.
+VMALLOC_START	VMALLOC_END-1	vmalloc() / ioremap() space.				//Size can be specified by the startup parameter "vmalloc=" 
 				Memory returned by vmalloc/ioremap will
 				be dynamically placed in this region.
 				Machine specific static mappings are also
@@ -62,11 +62,11 @@ VMALLOC_START	VMALLOC_END-1	vmalloc() / ioremap() space.
 				of the high_memory variable, and VMALLOC_END
 				is equal to 0xff800000.
 
-PAGE_OFFSET	high_memory-1	Kernel direct-mapped RAM region.
+PAGE_OFFSET	high_memory-1	Kernel direct-mapped RAM region.			//DMA and normal area?
 				This maps the platforms RAM, and typically
 				maps all platform RAM in a 1:1 relationship.
 
-PKMAP_BASE	PAGE_OFFSET-1	Permanent kernel mappings
+PKMAP_BASE	PAGE_OFFSET-1	Permanent kernel mappings				//HIGHMEM area
 				One way of mapping HIGHMEM pages into kernel
 				space.
 
