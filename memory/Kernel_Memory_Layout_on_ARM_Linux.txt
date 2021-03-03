@@ -62,7 +62,7 @@ VMALLOC_START	VMALLOC_END-1	vmalloc() / ioremap() space.				//Size can be specif
 				of the high_memory variable, and VMALLOC_END
 				is equal to 0xff800000.
 
-PAGE_OFFSET	high_memory-1	Kernel direct-mapped RAM region.			//DMA and normal area?
+PAGE_OFFSET	high_memory-1	Kernel direct-mapped RAM region.			//DMA and Regular area?
 				This maps the platforms RAM, and typically
 				maps all platform RAM in a 1:1 relationship.
 
