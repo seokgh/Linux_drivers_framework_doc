@@ -171,171 +171,175 @@ ffff0000-ffff1000 r-xp 00000000 00:00 0          [vectors]
 --------------------------------------------------------------------------------
 pi@raspberrypi:~ $ sudo pmap 1
 --------------------------------------------------------------------------------
+pi@raspberrypi:~ $ sudo pmap -x 1
 1:   /sbin/init splash
-00400000   1084K r-x-- systemd
-0051e000    128K r---- systemd
-0053e000      4K rw--- systemd
-00e2a000    940K rw---   [ anon ]
-b5000000    132K rw---   [ anon ]
-b5021000    892K -----   [ anon ]
-b5200000    132K rw---   [ anon ]
-b5221000    892K -----   [ anon ]
-b5321000      4K -----   [ anon ]
-b5322000   8192K rw---   [ anon ]
-b5b22000      4K -----   [ anon ]
-b5b23000   8192K rw---   [ anon ]
-b6323000    124K r-x-- libudev.so.1.6.13
-b6342000     60K ----- libudev.so.1.6.13
-b6351000      4K r---- libudev.so.1.6.13
-b6352000      4K rw--- libudev.so.1.6.13
-b6353000    100K r-x-- libgpg-error.so.0.26.1
-b636c000     60K ----- libgpg-error.so.0.26.1
-b637b000      4K r---- libgpg-error.so.0.26.1
-b637c000      4K rw--- libgpg-error.so.0.26.1
-b637d000     32K r-x-- libjson-c.so.3.0.1
-b6385000     60K ----- libjson-c.so.3.0.1
-b6394000      4K r---- libjson-c.so.3.0.1
-b6395000      4K rw--- libjson-c.so.3.0.1
-b6396000     28K r-x-- libargon2.so.1
-b639d000     60K ----- libargon2.so.1
-b63ac000      4K r---- libargon2.so.1
-b63ad000      4K rw--- libargon2.so.1
-b63ae000    424K r-x-- libdevmapper.so.1.02.1
-b6418000     60K ----- libdevmapper.so.1.02.1
-b6427000      4K r---- libdevmapper.so.1.02.1
-b6428000     12K rw--- libdevmapper.so.1.02.1
-b642b000      4K rw---   [ anon ]
-b642c000     24K r-x-- libuuid.so.1.3.0
-b6432000     60K ----- libuuid.so.1.3.0
-b6441000      4K r---- libuuid.so.1.3.0
-b6442000      4K rw--- libuuid.so.1.3.0
-b6443000     16K r-x-- libattr.so.1.1.2448
-b6447000     60K ----- libattr.so.1.1.2448
-b6456000      4K r---- libattr.so.1.1.2448
-b6457000      4K rw--- libattr.so.1.1.2448
-b6458000   1968K r-x-- libcrypto.so.1.1
-b6644000     64K ----- libcrypto.so.1.1
-b6654000    100K r---- libcrypto.so.1.1
-b666d000      4K rw--- libcrypto.so.1.1
-b666e000     16K rw---   [ anon ]
-b6672000    412K r-x-- libssl.so.1.1
-b66d9000     60K ----- libssl.so.1.1
-b66e8000     24K r---- libssl.so.1.1
-b66ee000     12K rw--- libssl.so.1.1
-b66f1000     16K r-x-- libcap-ng.so.0.0.0
-b66f5000     60K ----- libcap-ng.so.0.0.0
-b6704000      4K r---- libcap-ng.so.0.0.0
-b6705000      4K rw--- libcap-ng.so.0.0.0
-b6706000      8K r-x-- libdl-2.28.so
-b6708000     60K ----- libdl-2.28.so
-b6717000      4K r---- libdl-2.28.so
-b6718000      4K rw--- libdl-2.28.so
-b6719000    408K r-x-- libpcre.so.3.13.3
-b677f000     60K ----- libpcre.so.3.13.3
-b678e000      4K r---- libpcre.so.3.13.3
-b678f000      4K rw--- libpcre.so.3.13.3
-b6790000     92K r-x-- libpthread-2.28.so
-b67a7000     60K ----- libpthread-2.28.so
-b67b6000      4K r---- libpthread-2.28.so
-b67b7000      4K rw--- libpthread-2.28.so
-b67b8000      8K rw---   [ anon ]
-b67ba000    452K r-x-- libm-2.28.so
-b682b000     60K ----- libm-2.28.so
-b683a000      4K r---- libm-2.28.so
-b683b000      4K rw--- libm-2.28.so
-b683c000    272K r-x-- libblkid.so.1.1.0
-b6880000     64K ----- libblkid.so.1.1.0
-b6890000     12K r---- libblkid.so.1.1.0
-b6893000      4K rw--- libblkid.so.1.1.0
-b6894000    104K r-x-- liblz4.so.1.8.3
-b68ae000     64K ----- liblz4.so.1.8.3
-b68be000      4K r---- liblz4.so.1.8.3
-b68bf000      4K rw--- liblz4.so.1.8.3
-b68c0000    128K r-x-- liblzma.so.5.2.4
-b68e0000     60K ----- liblzma.so.5.2.4
-b68ef000      4K r---- liblzma.so.5.2.4
-b68f0000      4K rw--- liblzma.so.5.2.4
-b68f1000    192K r-x-- libidn.so.11.6.16
-b6921000     60K ----- libidn.so.11.6.16
-b6930000      4K r---- libidn.so.11.6.16
-b6931000      4K rw--- libidn.so.11.6.16
-b6932000     20K r-x-- libip4tc.so.0.1.0
-b6937000     60K ----- libip4tc.so.0.1.0
-b6946000      4K r---- libip4tc.so.0.1.0
-b6947000      4K rw--- libip4tc.so.0.1.0
-b6948000    788K r-x-- libgcrypt.so.20.2.4
-b6a0d000     64K ----- libgcrypt.so.20.2.4
-b6a1d000      4K r---- libgcrypt.so.20.2.4
-b6a1e000     16K rw--- libgcrypt.so.20.2.4
-b6a22000    300K r-x-- libcryptsetup.so.12.4.0
-b6a6d000     60K ----- libcryptsetup.so.12.4.0
-b6a7c000      4K r---- libcryptsetup.so.12.4.0
-b6a7d000      4K rw--- libcryptsetup.so.12.4.0
-b6a7e000     24K r-x-- libacl.so.1.1.2253
-b6a84000     60K ----- libacl.so.1.1.2253
-b6a93000      4K r---- libacl.so.1.1.2253
-b6a94000      4K rw--- libacl.so.1.1.2253
-b6a95000     16K r-x-- libcap.so.2.25
-b6a99000     60K ----- libcap.so.2.25
-b6aa8000      4K r---- libcap.so.2.25
-b6aa9000      4K rw--- libcap.so.2.25
-b6aaa000     60K r-x-- libapparmor.so.1.6.0
-b6ab9000     60K ----- libapparmor.so.1.6.0
-b6ac8000      4K r---- libapparmor.so.1.6.0
-b6ac9000      4K rw--- libapparmor.so.1.6.0
-b6aca000     80K r-x-- libkmod.so.2.3.4
-b6ade000     64K ----- libkmod.so.2.3.4
-b6aee000      4K r---- libkmod.so.2.3.4
-b6aef000      4K rw--- libkmod.so.2.3.4
-b6af0000    108K r-x-- libaudit.so.1.0.0
-b6b0b000     64K ----- libaudit.so.1.0.0
-b6b1b000      4K r---- libaudit.so.1.0.0
-b6b1c000      4K rw--- libaudit.so.1.0.0
-b6b1d000     40K rw---   [ anon ]
-b6b27000     48K r-x-- libpam.so.0.84.2
-b6b33000     60K ----- libpam.so.0.84.2
-b6b42000      4K r---- libpam.so.0.84.2
-b6b43000      4K rw--- libpam.so.0.84.2
-b6b44000    312K r-x-- libmount.so.1.1.0
-b6b92000     64K ----- libmount.so.1.1.0
-b6ba2000      8K r---- libmount.so.1.1.0
-b6ba4000      4K rw--- libmount.so.1.1.0
-b6ba5000    128K r-x-- libselinux.so.1
-b6bc5000     60K ----- libselinux.so.1
-b6bd4000      4K r---- libselinux.so.1
-b6bd5000      4K rw--- libselinux.so.1
-b6bd6000      4K rw---   [ anon ]
-b6bd7000     92K r-x-- libseccomp.so.2.3.3
-b6bee000     60K ----- libseccomp.so.2.3.3
-b6bfd000     48K r---- libseccomp.so.2.3.3
-b6c09000      4K rw--- libseccomp.so.2.3.3
-b6c0a000     24K r-x-- librt-2.28.so
-b6c10000     60K ----- librt-2.28.so
-b6c1f000      4K r---- librt-2.28.so
-b6c20000      4K rw--- librt-2.28.so
-b6c21000   1824K r-x-- libsystemd-shared-241.so
-b6de9000     64K ----- libsystemd-shared-241.so
-b6df9000    284K r---- libsystemd-shared-241.so
-b6e40000      4K rw--- libsystemd-shared-241.so
-b6e41000      4K rw---   [ anon ]
-b6e42000   1248K r-x-- libc-2.28.so
-b6f7a000     64K ----- libc-2.28.so
-b6f8a000      8K r---- libc-2.28.so
-b6f8c000      4K rw--- libc-2.28.so
-b6f8d000     12K rw---   [ anon ]
-b6fa7000     16K r-x-- libarmmem-v7l.so
-b6fab000     60K ----- libarmmem-v7l.so
-b6fba000      4K r---- libarmmem-v7l.so
-b6fbb000      4K rw--- libarmmem-v7l.so
-b6fbc000    128K r-x-- ld-2.28.so
-b6fe2000     40K rw---   [ anon ]
-b6fec000      4K r---- ld-2.28.so
-b6fed000      4K rw--- ld-2.28.so
-bea27000    132K rw---   [ stack ]
-bee78000      4K r-x--   [ anon ]
-bee79000      4K r----   [ anon ]
-bee7a000      4K r-x--   [ anon ]
-ffff0000      4K r-x--   [ anon ]
- total    33728K
+Address   Kbytes     RSS   Dirty Mode  Mapping
+00400000    1084    1080       0 r-x-- systemd
+0051e000     128     128     120 r---- systemd
+0053e000       4       4       4 rw--- systemd
+00e2a000     940     852     852 rw---   [ anon ]
+b5000000     132      12      12 rw---   [ anon ]
+b5021000     892       0       0 -----   [ anon ]
+b5200000     132      12      12 rw---   [ anon ]
+b5221000     892       0       0 -----   [ anon ]
+b5321000       4       0       0 -----   [ anon ]
+b5322000    8192       8       8 rw---   [ anon ]
+b5b22000       4       0       0 -----   [ anon ]
+b5b23000    8192       8       8 rw---   [ anon ]
+b6323000     124      24       0 r-x-- libudev.so.1.6.13
+b6342000      60       0       0 ----- libudev.so.1.6.13
+b6351000       4       4       4 r---- libudev.so.1.6.13
+b6352000       4       4       4 rw--- libudev.so.1.6.13
+b6353000     100      96       0 r-x-- libgpg-error.so.0.26.1
+b636c000      60       0       0 ----- libgpg-error.so.0.26.1
+b637b000       4       4       4 r---- libgpg-error.so.0.26.1
+b637c000       4       4       4 rw--- libgpg-error.so.0.26.1
+b637d000      32      32       0 r-x-- libjson-c.so.3.0.1
+b6385000      60       0       0 ----- libjson-c.so.3.0.1
+b6394000       4       4       4 r---- libjson-c.so.3.0.1
+b6395000       4       4       4 rw--- libjson-c.so.3.0.1
+b6396000      28      24       0 r-x-- libargon2.so.1
+b639d000      60       0       0 ----- libargon2.so.1
+b63ac000       4       4       4 r---- libargon2.so.1
+b63ad000       4       4       4 rw--- libargon2.so.1
+b63ae000     424     108       0 r-x-- libdevmapper.so.1.02.1
+b6418000      60       0       0 ----- libdevmapper.so.1.02.1
+b6427000       4       4       4 r---- libdevmapper.so.1.02.1
+b6428000      12      12       8 rw--- libdevmapper.so.1.02.1
+b642b000       4       0       0 rw---   [ anon ]
+b642c000      24      24       0 r-x-- libuuid.so.1.3.0
+b6432000      60       0       0 ----- libuuid.so.1.3.0
+b6441000       4       4       4 r---- libuuid.so.1.3.0
+b6442000       4       4       4 rw--- libuuid.so.1.3.0
+b6443000      16      12       0 r-x-- libattr.so.1.1.2448
+b6447000      60       0       0 ----- libattr.so.1.1.2448
+b6456000       4       4       4 r---- libattr.so.1.1.2448
+b6457000       4       4       4 rw--- libattr.so.1.1.2448
+b6458000    1968     472       0 r-x-- libcrypto.so.1.1
+b6644000      64       0       0 ----- libcrypto.so.1.1
+b6654000     100     100     100 r---- libcrypto.so.1.1
+b666d000       4       4       4 rw--- libcrypto.so.1.1
+b666e000      16       0       0 rw---   [ anon ]
+b6672000     412     116       0 r-x-- libssl.so.1.1
+b66d9000      60       0       0 ----- libssl.so.1.1
+b66e8000      24      24      24 r---- libssl.so.1.1
+b66ee000      12      12      12 rw--- libssl.so.1.1
+b66f1000      16      12       0 r-x-- libcap-ng.so.0.0.0
+b66f5000      60       0       0 ----- libcap-ng.so.0.0.0
+b6704000       4       4       4 r---- libcap-ng.so.0.0.0
+b6705000       4       4       4 rw--- libcap-ng.so.0.0.0
+b6706000       8       8       0 r-x-- libdl-2.28.so
+b6708000      60       0       0 ----- libdl-2.28.so
+b6717000       4       4       4 r---- libdl-2.28.so
+b6718000       4       4       4 rw--- libdl-2.28.so
+b6719000     408      12       0 r-x-- libpcre.so.3.13.3
+b677f000      60       0       0 ----- libpcre.so.3.13.3
+b678e000       4       4       4 r---- libpcre.so.3.13.3
+b678f000       4       4       4 rw--- libpcre.so.3.13.3
+b6790000      92      92       0 r-x-- libpthread-2.28.so
+b67a7000      60       0       0 ----- libpthread-2.28.so
+b67b6000       4       4       4 r---- libpthread-2.28.so
+b67b7000       4       4       4 rw--- libpthread-2.28.so
+b67b8000       8       4       4 rw---   [ anon ]
+b67ba000     452      88       0 r-x-- libm-2.28.so
+b682b000      60       0       0 ----- libm-2.28.so
+b683a000       4       4       4 r---- libm-2.28.so
+b683b000       4       4       4 rw--- libm-2.28.so
+b683c000     272      80       0 r-x-- libblkid.so.1.1.0
+b6880000      64       0       0 ----- libblkid.so.1.1.0
+b6890000      12      12      12 r---- libblkid.so.1.1.0
+b6893000       4       4       4 rw--- libblkid.so.1.1.0
+b6894000     104      40       0 r-x-- liblz4.so.1.8.3
+b68ae000      64       0       0 ----- liblz4.so.1.8.3
+b68be000       4       4       4 r---- liblz4.so.1.8.3
+b68bf000       4       4       4 rw--- liblz4.so.1.8.3
+b68c0000     128      20       0 r-x-- liblzma.so.5.2.4
+b68e0000      60       0       0 ----- liblzma.so.5.2.4
+b68ef000       4       4       4 r---- liblzma.so.5.2.4
+b68f0000       4       4       4 rw--- liblzma.so.5.2.4
+b68f1000     192      16       0 r-x-- libidn.so.11.6.16
+b6921000      60       0       0 ----- libidn.so.11.6.16
+b6930000       4       4       4 r---- libidn.so.11.6.16
+b6931000       4       4       4 rw--- libidn.so.11.6.16
+b6932000      20      16       0 r-x-- libip4tc.so.0.1.0
+b6937000      60       0       0 ----- libip4tc.so.0.1.0
+b6946000       4       4       4 r---- libip4tc.so.0.1.0
+b6947000       4       4       4 rw--- libip4tc.so.0.1.0
+b6948000     788      64       0 r-x-- libgcrypt.so.20.2.4
+b6a0d000      64       0       0 ----- libgcrypt.so.20.2.4
+b6a1d000       4       4       4 r---- libgcrypt.so.20.2.4
+b6a1e000      16      16      16 rw--- libgcrypt.so.20.2.4
+b6a22000     300      64       0 r-x-- libcryptsetup.so.12.4.0
+b6a6d000      60       0       0 ----- libcryptsetup.so.12.4.0
+b6a7c000       4       4       4 r---- libcryptsetup.so.12.4.0
+b6a7d000       4       4       4 rw--- libcryptsetup.so.12.4.0
+b6a7e000      24      24       0 r-x-- libacl.so.1.1.2253
+b6a84000      60       0       0 ----- libacl.so.1.1.2253
+b6a93000       4       4       4 r---- libacl.so.1.1.2253
+b6a94000       4       4       4 rw--- libacl.so.1.1.2253
+b6a95000      16      16       0 r-x-- libcap.so.2.25
+b6a99000      60       0       0 ----- libcap.so.2.25
+b6aa8000       4       4       4 r---- libcap.so.2.25
+b6aa9000       4       4       4 rw--- libcap.so.2.25
+b6aaa000      60      56       0 r-x-- libapparmor.so.1.6.0
+b6ab9000      60       0       0 ----- libapparmor.so.1.6.0
+b6ac8000       4       4       4 r---- libapparmor.so.1.6.0
+b6ac9000       4       4       4 rw--- libapparmor.so.1.6.0
+b6aca000      80      76       0 r-x-- libkmod.so.2.3.4
+b6ade000      64       0       0 ----- libkmod.so.2.3.4
+b6aee000       4       4       4 r---- libkmod.so.2.3.4
+b6aef000       4       4       4 rw--- libkmod.so.2.3.4
+b6af0000     108     104       0 r-x-- libaudit.so.1.0.0
+b6b0b000      64       0       0 ----- libaudit.so.1.0.0
+b6b1b000       4       4       4 r---- libaudit.so.1.0.0
+b6b1c000       4       4       4 rw--- libaudit.so.1.0.0
+b6b1d000      40       4       4 rw---   [ anon ]
+b6b27000      48      44       0 r-x-- libpam.so.0.84.2
+b6b33000      60       0       0 ----- libpam.so.0.84.2
+b6b42000       4       4       4 r---- libpam.so.0.84.2
+b6b43000       4       4       4 rw--- libpam.so.0.84.2
+b6b44000     312     304       0 r-x-- libmount.so.1.1.0
+b6b92000      64       0       0 ----- libmount.so.1.1.0
+b6ba2000       8       8       8 r---- libmount.so.1.1.0
+b6ba4000       4       4       4 rw--- libmount.so.1.1.0
+b6ba5000     128     124       0 r-x-- libselinux.so.1
+b6bc5000      60       0       0 ----- libselinux.so.1
+b6bd4000       4       4       4 r---- libselinux.so.1
+b6bd5000       4       4       4 rw--- libselinux.so.1
+b6bd6000       4       0       0 rw---   [ anon ]
+b6bd7000      92      92       0 r-x-- libseccomp.so.2.3.3
+b6bee000      60       0       0 ----- libseccomp.so.2.3.3
+b6bfd000      48      48      48 r---- libseccomp.so.2.3.3
+b6c09000       4       4       4 rw--- libseccomp.so.2.3.3
+b6c0a000      24      24       0 r-x-- librt-2.28.so
+b6c10000      60       0       0 ----- librt-2.28.so
+b6c1f000       4       4       4 r---- librt-2.28.so
+b6c20000       4       4       4 rw--- librt-2.28.so
+b6c21000    1824    1752       0 r-x-- libsystemd-shared-241.so
+b6de9000      64       0       0 ----- libsystemd-shared-241.so
+b6df9000     284      88      36 r---- libsystemd-shared-241.so
+b6e40000       4       4       4 rw--- libsystemd-shared-241.so
+b6e41000       4       4       4 rw---   [ anon ]
+b6e42000    1248    1220       0 r-x-- libc-2.28.so
+b6f7a000      64       0       0 ----- libc-2.28.so
+b6f8a000       8       8       8 r---- libc-2.28.so
+b6f8c000       4       4       4 rw--- libc-2.28.so
+b6f8d000      12      12      12 rw---   [ anon ]
+b6fa7000      16      16       0 r-x-- libarmmem-v7l.so
+b6fab000      60       0       0 ----- libarmmem-v7l.so
+b6fba000       4       4       4 r---- libarmmem-v7l.so
+b6fbb000       4       4       4 rw--- libarmmem-v7l.so
+b6fbc000     128     128       0 r-x-- ld-2.28.so
+b6fe2000      40      40      40 rw---   [ anon ]
+b6fec000       4       4       4 r---- ld-2.28.so
+b6fed000       4       4       4 rw--- ld-2.28.so
+bea27000     132      44      44 rw---   [ stack ]
+bee78000       4       0       0 r-x--   [ anon ]
+bee79000       4       0       0 r----   [ anon ]
+bee7a000       4       4       0 r-x--   [ anon ]
+ffff0000       4       0       0 r-x--   [ anon ]
+-------- ------- ------- ------- 
+total kB   33728    8184    1636
 pi@raspberrypi:~ $ 
+
 
