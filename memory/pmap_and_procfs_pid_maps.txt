@@ -1,0 +1,341 @@
+--------------------------------------------------------------------------------
+pi@raspberrypi:~ $ sudo cat /proc/1/maps
+--------------------------------------------------------------------------------
+00400000-0050f000 r-xp 00000000 b3:02 29214      /lib/systemd/systemd
+0051e000-0053e000 r--p 0010e000 b3:02 29214      /lib/systemd/systemd
+0053e000-0053f000 rw-p 0012e000 b3:02 29214      /lib/systemd/systemd
+00e2a000-00f15000 rw-p 00000000 00:00 0          [heap]
+b5000000-b5021000 rw-p 00000000 00:00 0 
+b5021000-b5100000 ---p 00000000 00:00 0 
+b5200000-b5221000 rw-p 00000000 00:00 0 
+b5221000-b5300000 ---p 00000000 00:00 0 
+b5321000-b5322000 ---p 00000000 00:00 0 
+b5322000-b5b22000 rw-p 00000000 00:00 0 
+b5b22000-b5b23000 ---p 00000000 00:00 0 
+b5b23000-b6323000 rw-p 00000000 00:00 0 
+b6323000-b6342000 r-xp 00000000 b3:02 1246       /lib/arm-linux-gnueabihf/libudev.so.1.6.13
+b6342000-b6351000 ---p 0001f000 b3:02 1246       /lib/arm-linux-gnueabihf/libudev.so.1.6.13
+b6351000-b6352000 r--p 0001e000 b3:02 1246       /lib/arm-linux-gnueabihf/libudev.so.1.6.13
+b6352000-b6353000 rw-p 0001f000 b3:02 1246       /lib/arm-linux-gnueabihf/libudev.so.1.6.13
+b6353000-b636c000 r-xp 00000000 b3:02 431        /lib/arm-linux-gnueabihf/libgpg-error.so.0.26.1
+b636c000-b637b000 ---p 00019000 b3:02 431        /lib/arm-linux-gnueabihf/libgpg-error.so.0.26.1
+b637b000-b637c000 r--p 00018000 b3:02 431        /lib/arm-linux-gnueabihf/libgpg-error.so.0.26.1
+b637c000-b637d000 rw-p 00019000 b3:02 431        /lib/arm-linux-gnueabihf/libgpg-error.so.0.26.1
+b637d000-b6385000 r-xp 00000000 b3:02 11767      /usr/lib/arm-linux-gnueabihf/libjson-c.so.3.0.1
+b6385000-b6394000 ---p 00008000 b3:02 11767      /usr/lib/arm-linux-gnueabihf/libjson-c.so.3.0.1
+b6394000-b6395000 r--p 00007000 b3:02 11767      /usr/lib/arm-linux-gnueabihf/libjson-c.so.3.0.1
+b6395000-b6396000 rw-p 00008000 b3:02 11767      /usr/lib/arm-linux-gnueabihf/libjson-c.so.3.0.1
+b6396000-b639d000 r-xp 00000000 b3:02 11454      /usr/lib/arm-linux-gnueabihf/libargon2.so.1
+b639d000-b63ac000 ---p 00007000 b3:02 11454      /usr/lib/arm-linux-gnueabihf/libargon2.so.1
+b63ac000-b63ad000 r--p 00006000 b3:02 11454      /usr/lib/arm-linux-gnueabihf/libargon2.so.1
+b63ad000-b63ae000 rw-p 00007000 b3:02 11454      /usr/lib/arm-linux-gnueabihf/libargon2.so.1
+b63ae000-b6418000 r-xp 00000000 b3:02 421        /lib/arm-linux-gnueabihf/libdevmapper.so.1.02.1
+b6418000-b6427000 ---p 0006a000 b3:02 421        /lib/arm-linux-gnueabihf/libdevmapper.so.1.02.1
+b6427000-b6428000 r--p 00069000 b3:02 421        /lib/arm-linux-gnueabihf/libdevmapper.so.1.02.1
+b6428000-b642b000 rw-p 0006a000 b3:02 421        /lib/arm-linux-gnueabihf/libdevmapper.so.1.02.1
+b642b000-b642c000 rw-p 00000000 00:00 0 
+b642c000-b6432000 r-xp 00000000 b3:02 499        /lib/arm-linux-gnueabihf/libuuid.so.1.3.0
+b6432000-b6441000 ---p 00006000 b3:02 499        /lib/arm-linux-gnueabihf/libuuid.so.1.3.0
+b6441000-b6442000 r--p 00005000 b3:02 499        /lib/arm-linux-gnueabihf/libuuid.so.1.3.0
+b6442000-b6443000 rw-p 00006000 b3:02 499        /lib/arm-linux-gnueabihf/libuuid.so.1.3.0
+b6443000-b6447000 r-xp 00000000 b3:02 11469      /usr/lib/arm-linux-gnueabihf/libattr.so.1.1.2448
+b6447000-b6456000 ---p 00004000 b3:02 11469      /usr/lib/arm-linux-gnueabihf/libattr.so.1.1.2448
+b6456000-b6457000 r--p 00003000 b3:02 11469      /usr/lib/arm-linux-gnueabihf/libattr.so.1.1.2448
+b6457000-b6458000 rw-p 00004000 b3:02 11469      /usr/lib/arm-linux-gnueabihf/libattr.so.1.1.2448
+b6458000-b6644000 r-xp 00000000 b3:02 15218      /usr/lib/arm-linux-gnueabihf/libcrypto.so.1.1
+b6644000-b6654000 ---p 001ec000 b3:02 15218      /usr/lib/arm-linux-gnueabihf/libcrypto.so.1.1
+b6654000-b666d000 r--p 001ec000 b3:02 15218      /usr/lib/arm-linux-gnueabihf/libcrypto.so.1.1
+b666d000-b666e000 rw-p 00205000 b3:02 15218      /usr/lib/arm-linux-gnueabihf/libcrypto.so.1.1
+b666e000-b6672000 rw-p 00000000 00:00 0 
+b6672000-b66d9000 r-xp 00000000 b3:02 15219      /usr/lib/arm-linux-gnueabihf/libssl.so.1.1
+b66d9000-b66e8000 ---p 00067000 b3:02 15219      /usr/lib/arm-linux-gnueabihf/libssl.so.1.1
+b66e8000-b66ee000 r--p 00066000 b3:02 15219      /usr/lib/arm-linux-gnueabihf/libssl.so.1.1
+b66ee000-b66f1000 rw-p 0006c000 b3:02 15219      /usr/lib/arm-linux-gnueabihf/libssl.so.1.1
+b66f1000-b66f5000 r-xp 00000000 b3:02 415        /lib/arm-linux-gnueabihf/libcap-ng.so.0.0.0
+b66f5000-b6704000 ---p 00004000 b3:02 415        /lib/arm-linux-gnueabihf/libcap-ng.so.0.0.0
+b6704000-b6705000 r--p 00003000 b3:02 415        /lib/arm-linux-gnueabihf/libcap-ng.so.0.0.0
+b6705000-b6706000 rw-p 00004000 b3:02 415        /lib/arm-linux-gnueabihf/libcap-ng.so.0.0.0
+b6706000-b6708000 r-xp 00000000 b3:02 422        /lib/arm-linux-gnueabihf/libdl-2.28.so
+b6708000-b6717000 ---p 00002000 b3:02 422        /lib/arm-linux-gnueabihf/libdl-2.28.so
+b6717000-b6718000 r--p 00001000 b3:02 422        /lib/arm-linux-gnueabihf/libdl-2.28.so
+b6718000-b6719000 rw-p 00002000 b3:02 422        /lib/arm-linux-gnueabihf/libdl-2.28.so
+b6719000-b677f000 r-xp 00000000 b3:02 471        /lib/arm-linux-gnueabihf/libpcre.so.3.13.3
+b677f000-b678e000 ---p 00066000 b3:02 471        /lib/arm-linux-gnueabihf/libpcre.so.3.13.3
+b678e000-b678f000 r--p 00065000 b3:02 471        /lib/arm-linux-gnueabihf/libpcre.so.3.13.3
+b678f000-b6790000 rw-p 00066000 b3:02 471        /lib/arm-linux-gnueabihf/libpcre.so.3.13.3
+b6790000-b67a7000 r-xp 00000000 b3:02 478        /lib/arm-linux-gnueabihf/libpthread-2.28.so
+b67a7000-b67b6000 ---p 00017000 b3:02 478        /lib/arm-linux-gnueabihf/libpthread-2.28.so
+b67b6000-b67b7000 r--p 00016000 b3:02 478        /lib/arm-linux-gnueabihf/libpthread-2.28.so
+b67b7000-b67b8000 rw-p 00017000 b3:02 478        /lib/arm-linux-gnueabihf/libpthread-2.28.so
+b67b8000-b67ba000 rw-p 00000000 00:00 0 
+b67ba000-b682b000 r-xp 00000000 b3:02 439        /lib/arm-linux-gnueabihf/libm-2.28.so
+b682b000-b683a000 ---p 00071000 b3:02 439        /lib/arm-linux-gnueabihf/libm-2.28.so
+b683a000-b683b000 r--p 00070000 b3:02 439        /lib/arm-linux-gnueabihf/libm-2.28.so
+b683b000-b683c000 rw-p 00071000 b3:02 439        /lib/arm-linux-gnueabihf/libm-2.28.so
+b683c000-b6880000 r-xp 00000000 b3:02 390        /lib/arm-linux-gnueabihf/libblkid.so.1.1.0
+b6880000-b6890000 ---p 00044000 b3:02 390        /lib/arm-linux-gnueabihf/libblkid.so.1.1.0
+b6890000-b6893000 r--p 00044000 b3:02 390        /lib/arm-linux-gnueabihf/libblkid.so.1.1.0
+b6893000-b6894000 rw-p 00047000 b3:02 390        /lib/arm-linux-gnueabihf/libblkid.so.1.1.0
+b6894000-b68ae000 r-xp 00000000 b3:02 11792      /usr/lib/arm-linux-gnueabihf/liblz4.so.1.8.3
+b68ae000-b68be000 ---p 0001a000 b3:02 11792      /usr/lib/arm-linux-gnueabihf/liblz4.so.1.8.3
+b68be000-b68bf000 r--p 0001a000 b3:02 11792      /usr/lib/arm-linux-gnueabihf/liblz4.so.1.8.3
+b68bf000-b68c0000 rw-p 0001b000 b3:02 11792      /usr/lib/arm-linux-gnueabihf/liblz4.so.1.8.3
+b68c0000-b68e0000 r-xp 00000000 b3:02 438        /lib/arm-linux-gnueabihf/liblzma.so.5.2.4
+b68e0000-b68ef000 ---p 00020000 b3:02 438        /lib/arm-linux-gnueabihf/liblzma.so.5.2.4
+b68ef000-b68f0000 r--p 0001f000 b3:02 438        /lib/arm-linux-gnueabihf/liblzma.so.5.2.4
+b68f0000-b68f1000 rw-p 00020000 b3:02 438        /lib/arm-linux-gnueabihf/liblzma.so.5.2.4
+b68f1000-b6921000 r-xp 00000000 b3:02 434        /lib/arm-linux-gnueabihf/libidn.so.11.6.16
+b6921000-b6930000 ---p 00030000 b3:02 434        /lib/arm-linux-gnueabihf/libidn.so.11.6.16
+b6930000-b6931000 r--p 0002f000 b3:02 434        /lib/arm-linux-gnueabihf/libidn.so.11.6.16
+b6931000-b6932000 rw-p 00030000 b3:02 434        /lib/arm-linux-gnueabihf/libidn.so.11.6.16
+b6932000-b6937000 r-xp 00000000 b3:02 11749      /usr/lib/arm-linux-gnueabihf/libip4tc.so.0.1.0
+b6937000-b6946000 ---p 00005000 b3:02 11749      /usr/lib/arm-linux-gnueabihf/libip4tc.so.0.1.0
+b6946000-b6947000 r--p 00004000 b3:02 11749      /usr/lib/arm-linux-gnueabihf/libip4tc.so.0.1.0
+b6947000-b6948000 rw-p 00005000 b3:02 11749      /usr/lib/arm-linux-gnueabihf/libip4tc.so.0.1.0
+b6948000-b6a0d000 r-xp 00000000 b3:02 430        /lib/arm-linux-gnueabihf/libgcrypt.so.20.2.4
+b6a0d000-b6a1d000 ---p 000c5000 b3:02 430        /lib/arm-linux-gnueabihf/libgcrypt.so.20.2.4
+b6a1d000-b6a1e000 r--p 000c5000 b3:02 430        /lib/arm-linux-gnueabihf/libgcrypt.so.20.2.4
+b6a1e000-b6a22000 rw-p 000c6000 b3:02 430        /lib/arm-linux-gnueabihf/libgcrypt.so.20.2.4
+b6a22000-b6a6d000 r-xp 00000000 b3:02 419        /lib/arm-linux-gnueabihf/libcryptsetup.so.12.4.0
+b6a6d000-b6a7c000 ---p 0004b000 b3:02 419        /lib/arm-linux-gnueabihf/libcryptsetup.so.12.4.0
+b6a7c000-b6a7d000 r--p 0004a000 b3:02 419        /lib/arm-linux-gnueabihf/libcryptsetup.so.12.4.0
+b6a7d000-b6a7e000 rw-p 0004b000 b3:02 419        /lib/arm-linux-gnueabihf/libcryptsetup.so.12.4.0
+b6a7e000-b6a84000 r-xp 00000000 b3:02 11445      /usr/lib/arm-linux-gnueabihf/libacl.so.1.1.2253
+b6a84000-b6a93000 ---p 00006000 b3:02 11445      /usr/lib/arm-linux-gnueabihf/libacl.so.1.1.2253
+b6a93000-b6a94000 r--p 00005000 b3:02 11445      /usr/lib/arm-linux-gnueabihf/libacl.so.1.1.2253
+b6a94000-b6a95000 rw-p 00006000 b3:02 11445      /usr/lib/arm-linux-gnueabihf/libacl.so.1.1.2253
+b6a95000-b6a99000 r-xp 00000000 b3:02 416        /lib/arm-linux-gnueabihf/libcap.so.2.25
+b6a99000-b6aa8000 ---p 00004000 b3:02 416        /lib/arm-linux-gnueabihf/libcap.so.2.25
+b6aa8000-b6aa9000 r--p 00003000 b3:02 416        /lib/arm-linux-gnueabihf/libcap.so.2.25
+b6aa9000-b6aaa000 rw-p 00004000 b3:02 416        /lib/arm-linux-gnueabihf/libcap.so.2.25
+b6aaa000-b6ab9000 r-xp 00000000 b3:02 358        /lib/arm-linux-gnueabihf/libapparmor.so.1.6.0
+b6ab9000-b6ac8000 ---p 0000f000 b3:02 358        /lib/arm-linux-gnueabihf/libapparmor.so.1.6.0
+b6ac8000-b6ac9000 r--p 0000e000 b3:02 358        /lib/arm-linux-gnueabihf/libapparmor.so.1.6.0
+b6ac9000-b6aca000 rw-p 0000f000 b3:02 358        /lib/arm-linux-gnueabihf/libapparmor.so.1.6.0
+b6aca000-b6ade000 r-xp 00000000 b3:02 11771      /usr/lib/arm-linux-gnueabihf/libkmod.so.2.3.4
+b6ade000-b6aee000 ---p 00014000 b3:02 11771      /usr/lib/arm-linux-gnueabihf/libkmod.so.2.3.4
+b6aee000-b6aef000 r--p 00014000 b3:02 11771      /usr/lib/arm-linux-gnueabihf/libkmod.so.2.3.4
+b6aef000-b6af0000 rw-p 00015000 b3:02 11771      /usr/lib/arm-linux-gnueabihf/libkmod.so.2.3.4
+b6af0000-b6b0b000 r-xp 00000000 b3:02 361        /lib/arm-linux-gnueabihf/libaudit.so.1.0.0
+b6b0b000-b6b1b000 ---p 0001b000 b3:02 361        /lib/arm-linux-gnueabihf/libaudit.so.1.0.0
+b6b1b000-b6b1c000 r--p 0001b000 b3:02 361        /lib/arm-linux-gnueabihf/libaudit.so.1.0.0
+b6b1c000-b6b1d000 rw-p 0001c000 b3:02 361        /lib/arm-linux-gnueabihf/libaudit.so.1.0.0
+b6b1d000-b6b27000 rw-p 00000000 00:00 0 
+b6b27000-b6b33000 r-xp 00000000 b3:02 464        /lib/arm-linux-gnueabihf/libpam.so.0.84.2
+b6b33000-b6b42000 ---p 0000c000 b3:02 464        /lib/arm-linux-gnueabihf/libpam.so.0.84.2
+b6b42000-b6b43000 r--p 0000b000 b3:02 464        /lib/arm-linux-gnueabihf/libpam.so.0.84.2
+b6b43000-b6b44000 rw-p 0000c000 b3:02 464        /lib/arm-linux-gnueabihf/libpam.so.0.84.2
+b6b44000-b6b92000 r-xp 00000000 b3:02 442        /lib/arm-linux-gnueabihf/libmount.so.1.1.0
+b6b92000-b6ba2000 ---p 0004e000 b3:02 442        /lib/arm-linux-gnueabihf/libmount.so.1.1.0
+b6ba2000-b6ba4000 r--p 0004e000 b3:02 442        /lib/arm-linux-gnueabihf/libmount.so.1.1.0
+b6ba4000-b6ba5000 rw-p 00050000 b3:02 442        /lib/arm-linux-gnueabihf/libmount.so.1.1.0
+b6ba5000-b6bc5000 r-xp 00000000 b3:02 483        /lib/arm-linux-gnueabihf/libselinux.so.1
+b6bc5000-b6bd4000 ---p 00020000 b3:02 483        /lib/arm-linux-gnueabihf/libselinux.so.1
+b6bd4000-b6bd5000 r--p 0001f000 b3:02 483        /lib/arm-linux-gnueabihf/libselinux.so.1
+b6bd5000-b6bd6000 rw-p 00020000 b3:02 483        /lib/arm-linux-gnueabihf/libselinux.so.1
+b6bd6000-b6bd7000 rw-p 00000000 00:00 0 
+b6bd7000-b6bee000 r-xp 00000000 b3:02 11954      /usr/lib/arm-linux-gnueabihf/libseccomp.so.2.3.3
+b6bee000-b6bfd000 ---p 00017000 b3:02 11954      /usr/lib/arm-linux-gnueabihf/libseccomp.so.2.3.3
+b6bfd000-b6c09000 r--p 00016000 b3:02 11954      /usr/lib/arm-linux-gnueabihf/libseccomp.so.2.3.3
+b6c09000-b6c0a000 rw-p 00022000 b3:02 11954      /usr/lib/arm-linux-gnueabihf/libseccomp.so.2.3.3
+b6c0a000-b6c10000 r-xp 00000000 b3:02 482        /lib/arm-linux-gnueabihf/librt-2.28.so
+b6c10000-b6c1f000 ---p 00006000 b3:02 482        /lib/arm-linux-gnueabihf/librt-2.28.so
+b6c1f000-b6c20000 r--p 00005000 b3:02 482        /lib/arm-linux-gnueabihf/librt-2.28.so
+b6c20000-b6c21000 rw-p 00006000 b3:02 482        /lib/arm-linux-gnueabihf/librt-2.28.so
+b6c21000-b6de9000 r-xp 00000000 b3:02 29210      /lib/systemd/libsystemd-shared-241.so
+b6de9000-b6df9000 ---p 001c8000 b3:02 29210      /lib/systemd/libsystemd-shared-241.so
+b6df9000-b6e40000 r--p 001c8000 b3:02 29210      /lib/systemd/libsystemd-shared-241.so
+b6e40000-b6e41000 rw-p 0020f000 b3:02 29210      /lib/systemd/libsystemd-shared-241.so
+b6e41000-b6e42000 rw-p 00000000 00:00 0 
+b6e42000-b6f7a000 r-xp 00000000 b3:02 414        /lib/arm-linux-gnueabihf/libc-2.28.so
+b6f7a000-b6f8a000 ---p 00138000 b3:02 414        /lib/arm-linux-gnueabihf/libc-2.28.so
+b6f8a000-b6f8c000 r--p 00138000 b3:02 414        /lib/arm-linux-gnueabihf/libc-2.28.so
+b6f8c000-b6f8d000 rw-p 0013a000 b3:02 414        /lib/arm-linux-gnueabihf/libc-2.28.so
+b6f8d000-b6f90000 rw-p 00000000 00:00 0 
+b6fa7000-b6fab000 r-xp 00000000 b3:02 11457      /usr/lib/arm-linux-gnueabihf/libarmmem-v7l.so
+b6fab000-b6fba000 ---p 00004000 b3:02 11457      /usr/lib/arm-linux-gnueabihf/libarmmem-v7l.so
+b6fba000-b6fbb000 r--p 00003000 b3:02 11457      /usr/lib/arm-linux-gnueabihf/libarmmem-v7l.so
+b6fbb000-b6fbc000 rw-p 00004000 b3:02 11457      /usr/lib/arm-linux-gnueabihf/libarmmem-v7l.so
+b6fbc000-b6fdc000 r-xp 00000000 b3:02 336        /lib/arm-linux-gnueabihf/ld-2.28.so
+b6fe2000-b6fec000 rw-p 00000000 00:00 0 
+b6fec000-b6fed000 r--p 00020000 b3:02 336        /lib/arm-linux-gnueabihf/ld-2.28.so
+b6fed000-b6fee000 rw-p 00021000 b3:02 336        /lib/arm-linux-gnueabihf/ld-2.28.so
+bea27000-bea48000 rw-p 00000000 00:00 0          [stack]
+bee78000-bee79000 r-xp 00000000 00:00 0          [sigpage]
+bee79000-bee7a000 r--p 00000000 00:00 0          [vvar]
+bee7a000-bee7b000 r-xp 00000000 00:00 0          [vdso]
+ffff0000-ffff1000 r-xp 00000000 00:00 0          [vectors]
+
+
+
+--------------------------------------------------------------------------------
+pi@raspberrypi:~ $ sudo pmap 1
+--------------------------------------------------------------------------------
+1:   /sbin/init splash
+00400000   1084K r-x-- systemd
+0051e000    128K r---- systemd
+0053e000      4K rw--- systemd
+00e2a000    940K rw---   [ anon ]
+b5000000    132K rw---   [ anon ]
+b5021000    892K -----   [ anon ]
+b5200000    132K rw---   [ anon ]
+b5221000    892K -----   [ anon ]
+b5321000      4K -----   [ anon ]
+b5322000   8192K rw---   [ anon ]
+b5b22000      4K -----   [ anon ]
+b5b23000   8192K rw---   [ anon ]
+b6323000    124K r-x-- libudev.so.1.6.13
+b6342000     60K ----- libudev.so.1.6.13
+b6351000      4K r---- libudev.so.1.6.13
+b6352000      4K rw--- libudev.so.1.6.13
+b6353000    100K r-x-- libgpg-error.so.0.26.1
+b636c000     60K ----- libgpg-error.so.0.26.1
+b637b000      4K r---- libgpg-error.so.0.26.1
+b637c000      4K rw--- libgpg-error.so.0.26.1
+b637d000     32K r-x-- libjson-c.so.3.0.1
+b6385000     60K ----- libjson-c.so.3.0.1
+b6394000      4K r---- libjson-c.so.3.0.1
+b6395000      4K rw--- libjson-c.so.3.0.1
+b6396000     28K r-x-- libargon2.so.1
+b639d000     60K ----- libargon2.so.1
+b63ac000      4K r---- libargon2.so.1
+b63ad000      4K rw--- libargon2.so.1
+b63ae000    424K r-x-- libdevmapper.so.1.02.1
+b6418000     60K ----- libdevmapper.so.1.02.1
+b6427000      4K r---- libdevmapper.so.1.02.1
+b6428000     12K rw--- libdevmapper.so.1.02.1
+b642b000      4K rw---   [ anon ]
+b642c000     24K r-x-- libuuid.so.1.3.0
+b6432000     60K ----- libuuid.so.1.3.0
+b6441000      4K r---- libuuid.so.1.3.0
+b6442000      4K rw--- libuuid.so.1.3.0
+b6443000     16K r-x-- libattr.so.1.1.2448
+b6447000     60K ----- libattr.so.1.1.2448
+b6456000      4K r---- libattr.so.1.1.2448
+b6457000      4K rw--- libattr.so.1.1.2448
+b6458000   1968K r-x-- libcrypto.so.1.1
+b6644000     64K ----- libcrypto.so.1.1
+b6654000    100K r---- libcrypto.so.1.1
+b666d000      4K rw--- libcrypto.so.1.1
+b666e000     16K rw---   [ anon ]
+b6672000    412K r-x-- libssl.so.1.1
+b66d9000     60K ----- libssl.so.1.1
+b66e8000     24K r---- libssl.so.1.1
+b66ee000     12K rw--- libssl.so.1.1
+b66f1000     16K r-x-- libcap-ng.so.0.0.0
+b66f5000     60K ----- libcap-ng.so.0.0.0
+b6704000      4K r---- libcap-ng.so.0.0.0
+b6705000      4K rw--- libcap-ng.so.0.0.0
+b6706000      8K r-x-- libdl-2.28.so
+b6708000     60K ----- libdl-2.28.so
+b6717000      4K r---- libdl-2.28.so
+b6718000      4K rw--- libdl-2.28.so
+b6719000    408K r-x-- libpcre.so.3.13.3
+b677f000     60K ----- libpcre.so.3.13.3
+b678e000      4K r---- libpcre.so.3.13.3
+b678f000      4K rw--- libpcre.so.3.13.3
+b6790000     92K r-x-- libpthread-2.28.so
+b67a7000     60K ----- libpthread-2.28.so
+b67b6000      4K r---- libpthread-2.28.so
+b67b7000      4K rw--- libpthread-2.28.so
+b67b8000      8K rw---   [ anon ]
+b67ba000    452K r-x-- libm-2.28.so
+b682b000     60K ----- libm-2.28.so
+b683a000      4K r---- libm-2.28.so
+b683b000      4K rw--- libm-2.28.so
+b683c000    272K r-x-- libblkid.so.1.1.0
+b6880000     64K ----- libblkid.so.1.1.0
+b6890000     12K r---- libblkid.so.1.1.0
+b6893000      4K rw--- libblkid.so.1.1.0
+b6894000    104K r-x-- liblz4.so.1.8.3
+b68ae000     64K ----- liblz4.so.1.8.3
+b68be000      4K r---- liblz4.so.1.8.3
+b68bf000      4K rw--- liblz4.so.1.8.3
+b68c0000    128K r-x-- liblzma.so.5.2.4
+b68e0000     60K ----- liblzma.so.5.2.4
+b68ef000      4K r---- liblzma.so.5.2.4
+b68f0000      4K rw--- liblzma.so.5.2.4
+b68f1000    192K r-x-- libidn.so.11.6.16
+b6921000     60K ----- libidn.so.11.6.16
+b6930000      4K r---- libidn.so.11.6.16
+b6931000      4K rw--- libidn.so.11.6.16
+b6932000     20K r-x-- libip4tc.so.0.1.0
+b6937000     60K ----- libip4tc.so.0.1.0
+b6946000      4K r---- libip4tc.so.0.1.0
+b6947000      4K rw--- libip4tc.so.0.1.0
+b6948000    788K r-x-- libgcrypt.so.20.2.4
+b6a0d000     64K ----- libgcrypt.so.20.2.4
+b6a1d000      4K r---- libgcrypt.so.20.2.4
+b6a1e000     16K rw--- libgcrypt.so.20.2.4
+b6a22000    300K r-x-- libcryptsetup.so.12.4.0
+b6a6d000     60K ----- libcryptsetup.so.12.4.0
+b6a7c000      4K r---- libcryptsetup.so.12.4.0
+b6a7d000      4K rw--- libcryptsetup.so.12.4.0
+b6a7e000     24K r-x-- libacl.so.1.1.2253
+b6a84000     60K ----- libacl.so.1.1.2253
+b6a93000      4K r---- libacl.so.1.1.2253
+b6a94000      4K rw--- libacl.so.1.1.2253
+b6a95000     16K r-x-- libcap.so.2.25
+b6a99000     60K ----- libcap.so.2.25
+b6aa8000      4K r---- libcap.so.2.25
+b6aa9000      4K rw--- libcap.so.2.25
+b6aaa000     60K r-x-- libapparmor.so.1.6.0
+b6ab9000     60K ----- libapparmor.so.1.6.0
+b6ac8000      4K r---- libapparmor.so.1.6.0
+b6ac9000      4K rw--- libapparmor.so.1.6.0
+b6aca000     80K r-x-- libkmod.so.2.3.4
+b6ade000     64K ----- libkmod.so.2.3.4
+b6aee000      4K r---- libkmod.so.2.3.4
+b6aef000      4K rw--- libkmod.so.2.3.4
+b6af0000    108K r-x-- libaudit.so.1.0.0
+b6b0b000     64K ----- libaudit.so.1.0.0
+b6b1b000      4K r---- libaudit.so.1.0.0
+b6b1c000      4K rw--- libaudit.so.1.0.0
+b6b1d000     40K rw---   [ anon ]
+b6b27000     48K r-x-- libpam.so.0.84.2
+b6b33000     60K ----- libpam.so.0.84.2
+b6b42000      4K r---- libpam.so.0.84.2
+b6b43000      4K rw--- libpam.so.0.84.2
+b6b44000    312K r-x-- libmount.so.1.1.0
+b6b92000     64K ----- libmount.so.1.1.0
+b6ba2000      8K r---- libmount.so.1.1.0
+b6ba4000      4K rw--- libmount.so.1.1.0
+b6ba5000    128K r-x-- libselinux.so.1
+b6bc5000     60K ----- libselinux.so.1
+b6bd4000      4K r---- libselinux.so.1
+b6bd5000      4K rw--- libselinux.so.1
+b6bd6000      4K rw---   [ anon ]
+b6bd7000     92K r-x-- libseccomp.so.2.3.3
+b6bee000     60K ----- libseccomp.so.2.3.3
+b6bfd000     48K r---- libseccomp.so.2.3.3
+b6c09000      4K rw--- libseccomp.so.2.3.3
+b6c0a000     24K r-x-- librt-2.28.so
+b6c10000     60K ----- librt-2.28.so
+b6c1f000      4K r---- librt-2.28.so
+b6c20000      4K rw--- librt-2.28.so
+b6c21000   1824K r-x-- libsystemd-shared-241.so
+b6de9000     64K ----- libsystemd-shared-241.so
+b6df9000    284K r---- libsystemd-shared-241.so
+b6e40000      4K rw--- libsystemd-shared-241.so
+b6e41000      4K rw---   [ anon ]
+b6e42000   1248K r-x-- libc-2.28.so
+b6f7a000     64K ----- libc-2.28.so
+b6f8a000      8K r---- libc-2.28.so
+b6f8c000      4K rw--- libc-2.28.so
+b6f8d000     12K rw---   [ anon ]
+b6fa7000     16K r-x-- libarmmem-v7l.so
+b6fab000     60K ----- libarmmem-v7l.so
+b6fba000      4K r---- libarmmem-v7l.so
+b6fbb000      4K rw--- libarmmem-v7l.so
+b6fbc000    128K r-x-- ld-2.28.so
+b6fe2000     40K rw---   [ anon ]
+b6fec000      4K r---- ld-2.28.so
+b6fed000      4K rw--- ld-2.28.so
+bea27000    132K rw---   [ stack ]
+bee78000      4K r-x--   [ anon ]
+bee79000      4K r----   [ anon ]
+bee7a000      4K r-x--   [ anon ]
+ffff0000      4K r-x--   [ anon ]
+ total    33728K
+pi@raspberrypi:~ $ 
+
