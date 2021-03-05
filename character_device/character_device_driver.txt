@@ -1,0 +1,59 @@
+
+
+
+                                                                  .------------------------------------.
+                                                     system_call  | fd = open("/dev/my_node", O_RDWR); |
+                                                                  '--|---------------------------------'
+                                                                     |                                                            .--------------.
+                                                                     |                                                            | /dev/my_node |
+                                                                     |                                                            '--------------'
+   user space                                                        |                                                                    |
+ --------------------------------------------------------------------|--------------------------------------------------------------------|---------------------------------------------------------
+   kernel space                                                      |                                                                    v
+                                                         .-----------|-------------------------------------------.            .----------------------.
+                                     .---------.         |           |               /include/linux/fs.h         |       VFS  | /include/linux/fs.h  |
+                               fd = 0|         |         |           v                                           |            |                      |
+                                     |---------|         | struct file {                                         |            | struct inode {       |
+                               fd = 1|         |         |     ...                                               |            |     ...              |
+                                     |---------|         |     struct inode       *f_inode;   /* cached value */ ------------>|     dev_t    i_rdev; |
+                               fd = 2|         |         |     struct path        f_path;                        |            |     ...          |   |
+                                     |---------|         |                                                       |            | };               |   |
+   task_struct *current              |         |         |         struct path {                                 |            '------------------|---'
+   .----------------.                |---------|         |            struct vfsmount  *mnt;                     |                               |
+   | files->fdt->fd |--------------->| ...     |-------->|            struct dentry    *dentry;                  |                               |
+   '----------------'                |         |         |         } __randomize_layout;                         |                               |
+                                     |---------|         |                                                       |                               |
+                                     | ...     |         |     unsigned int       f_flags;                       |        .----------------------|-------------------------------------.--------.---------.
+                                     |---------|         |     fmode_t            f_mode;                        |        | /fs/char_dev.c       |                                     |        |         |
+                             fd = 254|         |         |     ...                                               |        |                      |                                     |        |         |
+                                     |---------|         |     const struct file_operations *f_op;               |        |    chrdevs[]         v                                     |        |         |
+                             fd = 255|         |         |     ...                                               |        |    .----.----.----.----.----.----.--------.----.----.----. |        |         |
+                                     '---------'         |     struct address_space    *f_mapping;               |        |    |    |    |    |    |    |    |  ...   |    |    |    | |        |         |
+                                                         | };                                                    |        |    '----'----'----'----'----'----'--------'----'----'----' |        |         |
+                                                         '-------------------------------------------------------'        |       .-------------------------------------------.        |        |         |
+                                                                                                                          |       | static struct char_device_struct {        |        | block  | network |
+                                                                                                                          |       |    struct char_device_struct *next;       |        | device | device  |
+                                                                                                                          |       |    unsigned int major;                    |        |        |         |
+                                    .-----------------------------------------------------------------------------.       |       |    unsigned int baseminor;                |        |        |         |
+                                    | /include/linux/fs.h                                                         |       |       |    int minorct;                           |        |        |         |
+                                    |                                                                             |       |       |    char name[64];                         |        |        |         |
+                                    | struct file_operations {                                                    |       |   .------- struct cdev *cdev;      /* will die */ |        |        |         |
+                                    |    struct module *owner;                                                    |       |   |   | } *chrdevs[CHRDEV_MAJOR_HASH_SIZE];       |        |        |         |
+                                    |    loff_t (*llseek) (struct file *, loff_t, int);                           |       |   |   '-------------------------------------------'        |        |         |
+                                    |    ssize_t (*read) (struct file *, char __user *, size_t, loff_t *);        |       '---|--------------------------------------------------------'--------'---------'
+                                    |    ssize_t (*write) (struct file *, const char __user *, size_t, loff_t *); |           |
+                                    |    ...                                                                      |           |
+                                    |    __poll_t (*poll) (struct file *, struct poll_table_struct *);            |           |
+                                    |    long (*unlocked_ioctl) (struct file *, unsigned int, unsigned long);     |           v
+                                    |    long (*compat_ioctl) (struct file *, unsigned int, unsigned long);       |       .--------------------------------------------.
+                                    |    int (*mmap) (struct file *, struct vm_area_struct *);                    |       | /include/linux/cdev.h                      |
+                                    |                                                                             |       |                                            |
+                                    |    int (*open) (struct inode *, struct file *);                             |       | struct cdev {                              |
+                                    |    int (*flush) (struct file *, fl_owner_t id);                             |       |    struct kobject kobj;                    |
+                                    |    int (*release) (struct inode *, struct file *);                          |       |    struct module *owner;                   |
+                                    |    int (*fsync) (struct file *, loff_t, loff_t, int datasync);              |<---------- const struct file_operations *ops;      |
+                                    |    int (*fasync) (int, struct file *, int);                                 |       |    struct list_head list;                  |
+                                    |    int (*lock) (struct file *, int, struct file_lock *);                    |       |    dev_t dev;                              |
+                                    |    ...                                                                      |       |    unsigned int count;                     |
+                                    | } __randomize_layout;                                                       |       | } __randomize_layout;                      |
+                                    '-----------------------------------------------------------------------------'       '--------------------------------------------'
