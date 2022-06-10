@@ -1,25 +1,36 @@
 //Linux Kernel的 irq handler, softirq, tasklet
-
+---------------------------------------------------------------------------------
 Linux Kernel中irq handler, softirq handler 和 tasklet 是比较容易混淆的概念，下面整理一下。
-
-Irq handler通常被称为中断执行的TOP Half，softirq和tasklet被称为bottom half。它们的执行次序可见下图：
-
-                                     
-某硬件interrupt line触发irq--->(interrupt line disabled)---->cpu进入irq exception---->根据irq触发的interrupt line，调用相应的irq handler---->(interrupt line enabled)---->判断是不是在嵌套的irq handler里，如果不是（最后一层irq)---->preempt disable---->根据irq_stat[CPU_NUM]里被置位的bit，运行相应的softirq handler---->如果irq_stat[TASKLET_SOFTIRQ]被置位，那么tasklet handler的链表将作为softirq_vec[TASKLET_SOFTIRQ]的handler被执行---->所有置位的softirq handler都执行完了---->preempt enable---->irq返回。
+Irq handler通常被称为中断执行的TOP Half，softirq和tasklet被称为bottom half。
 
 
+它们的执行次序：                                     
+
+某硬件interrupt line触发irq
+  --->(interrupt line disabled)
+    ---->cpu进入irq exception
+        ---->根据irq触发的interrupt line，调用相应的irq handler
+            ---->(interrupt line enabled)
+                ---->判断是不是在嵌套的irq handler里，如果不是（最后一层irq)
+                    ---->preempt disable
+                        ---->根据irq_stat[CPU_NUM]里被置位的bit，运行相应的softirq handler
+                            ---->如果irq_stat[TASKLET_SOFTIRQ]被置位，那么tasklet handler的链表将作为softirq_vec[TASKLET_SOFTIRQ]的handler被执行
+                                  ---->所有置位的softirq handler都执行完了
+                                      ---->preempt enable
+                                          ---->irq返回。
 
 
 
 irq handler:
-实际响应硬件irq的服务程序，通常由request_irq(IRQ_NUM, irq_handler, flags, name, dev)函数注册。硬件中断发生后（即IRQ_NUM被触发后），irq_handler首先被执行。
+------------------------
+实际响应硬件irq的服务程序，通常由(devm_)request_irq(IRQ_NUM, irq_handler, flags, name, dev)函数族注册。
+硬件中断发生后（即IRQ_NUM被触发后），irq_handler首先被执行。
 
 
+irq handler执行的时候，系统处于以下状态：
 
-
-irq handler执行的时候系统处于以下状态：
-
-1. 在所有cpu上触发该中断的interrupt line被disable。因此在执行irq handler的时候，该irq不会在任何CPU上再触发。如果request_irq()的时候所有flags = IRQF_SHARED，那么所有shared同一interrupt line的irq handler都不会被触发。其他interrupt line的irq还是会触发。
+1. 在所有cpu上触发该中断的interrupt line被disable。因此在执行irq handler的时候，该irq不会在任何CPU上再触发。
+如果request_irq()的时候所有flags = IRQF_SHARED，那么所有shared同一interrupt line的irq handler都不会被触发。其他interrupt line的irq还是会触发。
 
 2. 如果flags = IRQF_DISABLED，那么除了上面所述的1以外，在触发该中断的cpu上的所有中断都被disable了。在其他cpu上中断还会触发。
 
@@ -27,58 +38,115 @@ irq handler执行的时候系统处于以下状态：
 
 
 softirq handler:
+------------------------
 在irq执行后，Interrupt line将被重新enable，此时该中断将可能再次触发。此后将执行softirq handler。所以在softirq handler执行的时候，任何中断都可能触发。
 
-softirq handler 是一组静态函数指针数组，定义在softirq_vec[NR_SOFTIRQS]中，类型为struct softirq_action。数组里的每个索引对应一个特定的softirq事件的handler。如index 0对应softirq事件是Hi tasklet，index 2对应的是timer softirq，index 6对应的是tasklet。
+softirq handler 是一组静态函数指针数组，定义在softirq_vec[NR_SOFTIRQS]中，类型为struct softirq_action。
+数组里的每个索引对应一个特定的softirq事件的handler。如index 0对应softirq事件是Hi tasklet，index 2对应的是timer softirq，index 6对应的是tasklet。
 
 softirq存在的意义：
 尽可能减少在irq handler里做的事情，使irq handler尽快返回。把大部分可以延迟做得事情放在softirq里做。这就是所谓的TOP HALF和BOTTOM HALF。
-因为irq handler执行的时候至少触发的interrupt line是disable的，如果一个irq handler执行的时间很长，下一个中断就无法相应。一般硬件外设通过interrupt来指示收到数据，长时间不响应中断就造成数据在硬件的FIFO里没有及时搬走，FIFO满了就不能再收数据，从而导致数据丢失。
+因为irq handler执行的时候至少触发的interrupt line是disable的，如果一个irq handler执行的时间很长，下一个中断就无法相应。
+一般硬件外设通过interrupt来指示收到数据，长时间不响应中断就造成数据在硬件的FIFO里没有及时搬走，FIFO满了就不能再收数据，从而导致数据丢失。
+
+
+被激活的softirq通常并不会立即执行，一般会在之后的某个时刻，检查当前系统中是否有被pending的softirq，如果有就去执行。
+
+触发softirq的时机，有3个：
+------------------------
+1. (随便某个?)硬件中断代码返回的时候
+void irq_exit(void)
+{
+    ...
+    if (!in_interrupt() && local_softirq_pending())
+        invoke_softirq();
+    ...
+}
+
+
+2. ksoftirqd内核服务线程运行的时候 (softirq突然大量发生的时候)
+static int run_ksoftirqd(void * __bind_cpu)
+{
+    ...
+    do_softirq();
+    ...
+}
+
+3.在系统中，显示的去检查挂起的softirq
+int netif_rx_ni(struct sk_buff *skb)
+{
+    ...
+    if (local_softirq_pending())
+        do_softirq();
+    ...
+}
+
 
 softirq怎样被触发：
+------------------------
+当需要启动softirq的时候，调用 raise_softirq_irqoff(softirq_num) 来将 irq_stat[NR_CPUS] 对应的bit置位。
+那么下一次Irq handler执行完之后,被置位的那些softirq handler就会执行。
 
-当需要softirq启动的时候，调用raise_softirq_irqoff(softirq_num)来将irq_stat[NR_CPUS]对应的bit置位。那么下一次Iraq handler执行完之后被置位的那些softirq handler就会执行。请注意，每个cpu都有一个独立的irq_stat，同一个softirq的bit可能同时在多个cpu的irq_stat中被置位，因此一个softirq handler可能在多个cpu上同时被执行，softirq handler需要考虑同时执行的互斥问题。
+注意，每个cpu都有一个独立的irq_stat[]，同一个softirq的bit可能同时在多个cpu的irq_stat中被置位，
+因此一个softirq handler, 可能在多个cpu上同时被执行，softirq handler需要考虑同时执行的 互斥问题。
 
 
 
 
 
 tasklet handler:
-tasklet有两种：tasklet和hi prority tasklet。前者对应softirq_vec［TASKLET_SOFTIRQ］；后者对应softirq_vec[HI_SOFTIRQ]。只是后者排在softirq_vec[]的第一个，所以更早被执行。
+------------------------
+tasklet有两种：tasklet和hi prority tasklet。
+前者对应 softirq_vec[TASKLET_SOFTIRQ];
+后者对应 softirq_vec[HI_SOFTIRQ]。只是后者排在softirq_vec[]的第一个，所以更早被执行。
 
 下面统称为tasklet.
-
 tasklet其实就是某一种softirq，它的softirq handler是tasklet_action(), 这个函数遵循上面所述的所有softirq的规则。
 
-tasklet handler是注册到tasklet_vec链表上的函数，tasklet_vec链表将在tasklet_action()里被逐个执行。也就是说一个TASKLET_SOFT的softirq handler里执行了一串tasklet handler。
+tasklet handler是注册到tasklet_vec链表上的函数，tasklet_vec链表将在tasklet_action()里被逐个执行。
+也就是说一个TASKLET_SOFT的softirq handler里执行了一串tasklet handler。
 
 tasklet可以在run time的时候通过tasklet_init()函数动态生成，这与softirq handler必须在编译时就在softirq_vec[]里写好是不同。
 
 tasklet_schedule()函数将tasklet handler注册到tasklet_vec链表上，tasklet_vec是个per cpu data.
 
-一个tasklet handler不会同时在多个cpu上同时运行。更直接的说，tasklet handler只会在运行tasklet_schedule()将其注册到tasklet_vec的那个cpu上运行。这个是由TASKLET_STATE_RUN这个bit控制的。
+一个tasklet handler, 不会同时在多个cpu上同时运行。
+更直接的说，tasklet handler只会在运行tasklet_schedule()将其注册到tasklet_vec的那个cpu上运行。这个是由TASKLET_STATE_RUN这个bit控制的。
 
 
 
 
 
 需要特别注意点：
+------------------------------------------------
+1. irq handler, softirq handler和tasklet handler都是工作在interrupt context下的。
+所以在这三个handler中绝对不可以调用schedule()函数。
+当然也不可以调用任何使用了schedule()的函数，包 括wait_interruptible, semaphore, mutex等。
+因为interrupt context没有自己的task structure, 不能进程调度。
+所以一定要记住irq, softirq和tasklet中绝对不能sleep。
 
-1. irq handler, softirq handler和tasklet handler都是工作在interrupt context下的。所以在这三个handler中绝对不可以调用schedule()函数。当然也不可以调用任何使用了schedule()的函数，包 括wait_interruptible, semaphore, mutex等。因为interrupt context没有自己的task structure, 不能进程调度。所以一定要记住irq, softirq和tasklet中绝对不能sleep。另外，在执行这三种handler的时候，preempt是disable的，即使 scheduler timer时间到了，也不会发生抢占。道理是一样的，interrupt context下不能进程调度。在这三种handler执行的过程中唯一能打断它们的只有irq handler。
-
-2. 同一softirq handler因为能在多个cpu上同时运行，而同一tasklet handler某一时刻只能在一个cpu上运行，所以在SMP的系统上，softirq handler将更及时的被处理，但需要考虑多cpu上运行的互斥问题。在UP的系统上，softirq和tasklet的效率是一样的。
-
-3. 一般的Driver基本上都是irq+tasklet或irq+workqueue的实现方法。很少会用到静态注册一个softirq，因为很少有实时性 要求必须softirq才能满足的场合。关于workqueue，其实就是一个kernel thread，它的好处是thread能被进程调度，所以wait_interruptible, semaphore, mutex这类sleep的函数（实际上就是调用了schedule()的函数）在work queue里都是可以用的。但是work queue的实时性较tasklet要差一些，原因很简单work queue作为一个kernel thread，本身自己都是要被scheduler调度后才能执行的，而且执行过程中可能被其他进程抢占；
-
-
-
-而tasklet在irq handler之后立即执行，执行过程中也不会被抢占。所以在写driver之前要考虑你的bottom half用tasklet还是work queue，主要是权衡以下两点：
- 1. tasklet能较快被执行完毕，但是执行过程中不能被抢占，所以其他进程没有机会执行。同时tasklet自己不能sleep。
- 2. workqueue执行完毕需要较长时间，但能被抢占，所以其他进程不会长时间等待。同时workqueu能主动sleep。
-
-因此，实时性要求高的场合考虑用tasklet。
+另外，在执行这三种handler的时候，preempt是disable的，即使 scheduler timer时间到了，也不会发生抢占。道理是一样的，interrupt context下不能进程调度。
+在这三种handler执行的过程中唯一能打断它们的只有irq handler。
 
 
+2. 同一softirq handler因为能在多个cpu上同时运行，而同一tasklet handler某一时刻只能在一个cpu上运行，
+所以在SMP的系统上，softirq handler将更及时的被处理，但需要考虑多cpu上运行的互斥问题。
 
 
+3. 一般的Driver, 基本上都是irq + tasklet 或 irq + workqueue 的实现方法。
+很少会用到静态注册一个softirq，因为很少有实时性 要求必须softirq才能满足的场合。
+
+关于workqueue，其实就是一个kernel thread，它的好处是thread能被进程调度，
+所以wait_interruptible, semaphore, mutex这类sleep的函数（实际上就是调用了schedule()的函数）在work queue里都是可以用的。
+但是work queue的实时性较tasklet要差一些，原因很简单: work queue作为一个kernel thread，本身自己都是要被scheduler调度后才能执行的，而且执行过程中可能被其他进程抢占；
+
+
+
+而tasklet在irq handler之后立即执行，执行过程中也不会被抢占。
+所以在写driver之前要考虑你的bottom half用tasklet还是work queue，主要是权衡以下两点：
+
+1. tasklet能较快被执行完毕，但是执行过程中不能被抢占，所以其他进程没有机会执行。同时tasklet自己不能sleep。
+2. workqueue执行完毕需要较长时间，但能被抢占，所以其他进程不会长时间等待。同时workqueu能主动sleep。
+
+因此，实时性要求高的场合, 考虑用tasklet。
 
