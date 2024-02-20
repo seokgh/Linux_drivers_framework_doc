@@ -38,11 +38,11 @@ int of_get_named_gpio_flags(struct device_node *np, const char *propname, int in
 // flags는 꼭 유의해야 함. 문서에 따르면 int 유형의 값이어야 하지만 실제로는 int 매개변수일 수 없음(kernel panic 발생).
 // 커널 내의 코드를 읽고 나서야 알게 된 것인데, flags 매개변수는 struct gpio_config 유형이어야 함을 알 수 있음, 정의는 다음 파일에서 정의됨: include/linux/sys_config.h
 // struct gpio_config {
-//     u32 gpio;       /* gpio global index, must be unique */
-//     u32     mul_sel;    /* multi sel val: 0 - input, 1 - output... */
-//     u32     pull;       /* pull val: 0 - pull up/down disable, 1 - pull up... */
-//     u32     drv_level;  /* driver level val: 0 - level 0, 1 - level 1... */
-//     u32 data;       /* data val: 0 - low, 1 - high, only vaild when mul_sel is input/output */
+//     u32 	gpio;       /* gpio global index, must be unique */
+//     u32 	mul_sel;    /* multi sel val: 0 - input, 1 - output... */
+//     u32     	pull;       /* pull val: 0 - pull up/down disable, 1 - pull up... */
+//     u32     	drv_level;  /* driver level val: 0 - level 0, 1 - level 1... */
+//     u32	data;       /* data val: 0 - low, 1 - high, only vaild when mul_sel is input/output */
 // };
 
 int 유형의 gpio 핀을 가져오면은, 이제 linux/gpio.h 에 있는 gpio 핀 조작 함수들을 사용할 수 있다:
