@@ -1,4 +1,5 @@
 --------------------------------------------------------------------------------------------------------------------------------
+dts에서 제일 햇갈리는 
 #gpio-cells ＝ <6> 의 뜻
 --------------------------------------------------------------------------------------------------------------------------------
 “#gpio-cells ＝ <6>” 의 뜻은, 이 SoC의 device tree 에서는 gpio 사용법을 설명할 때, 6개의 파라미터가 필요하다는 뜻.
@@ -64,11 +65,87 @@ int gpio_to_irq(unsigned gpio);					// io 핀에 대응하는 인터럽트 번�
 
 
 
+--------------------------------------------------------------------------------------------------------------------------------
+예제
+--------------------------------------------------------------------------------------------------------------------------------
+step1. dts에서 2 gpio 노드 정의
+-------------------------------------------------------------------
+seok_buzzer {
+	compatible = "seok,buzzer";
+	gpios = <&pio 3 24 1 1 1 1>; 
+};
+
+seok_leds {
+	compatible = "seok,leds";
+	gpios = <&r_pio 11 10 1 1 1 1>, <&r_pio 11 12 1 1 1 1>;
+};
+
+-------------------------------------------------------------------
+step2. kernel driver에서 그 중 한개 노드 취득해서 제어
+-------------------------------------------------------------------
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/platform_device.h>
+#include <linux/of.h>
+#include <linux/of_gpio.h>
+#include <linux/gpio.h>
+#include <linux/sys_config.h>
+#include <linux/delay.h>
+
+int myprobe(struct platform_device *pdev)
+{
+	struct device_node *nd = pdev->dev.of_node;
+	int gpio;   
+	struct gpio_config config;
 
 
-----------------------------------------------------------------
+	printk("gpio count:%d\n", of_gpio_named_count(nd, "gpios"));
+	gpio = of_get_named_gpio_flags(nd, "gpios", 0, (enum of_gpio_flags *)&config);
+	if (!gpio_is_valid(gpio))
+		printk("gpio isn't valid\n");
+	if (gpio_request(gpio, pdev->name) < 0)
+		printk("gpio request failed %d\n", gpio);
+
+	gpio_direction_output(gpio, 1);
+	msleep(3000);
+	gpio_direction_input(gpio);
+	gpio_free(gpio);
+	return 0;
+}
+
+int myremove(struct platform_device *pdev)
+{
+	printk("in myremove ...\n");
+	return 0;
+}
+
+//
+struct of_device_id ids[] = {
+	{.compatible = "seok,buzzer"},
+	{},
+};
+
+struct platform_driver mydrv = {
+	.probe = myprobe,
+	.remove = myremove,
+
+	.driver = {
+		.owner = THIS_MODULE,
+		.name = "mydrv" ,
+
+		.of_match_table = ids,
+	},
+};
+
+module_platform_driver(mydrv);
+MODULE_LICENSE("GPL");
+
+
+
+
+--------------------------------------------------------------------------------------------------------------------------------
 from kernel /Documentation/devicetree/bindings/gpio/gpio.txt
-----------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
 
 
 Specifying GPIO information for devices
